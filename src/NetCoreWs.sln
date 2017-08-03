@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.0.0
+MinimumVisualStudioVersion = 10.0.0.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetCoreWs", "NetCoreWs/NetCoreWs.csproj", "{9F682B4F-6E68-4AF3-8A2A-9D36F9AB7BB9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetCoreWs.Uv", "NetCoreWs.Uv\NetCoreWs.Uv.csproj", "{07EF13CD-5BAD-4989-BEA8-0369E735954C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9F682B4F-6E68-4AF3-8A2A-9D36F9AB7BB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F682B4F-6E68-4AF3-8A2A-9D36F9AB7BB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F682B4F-6E68-4AF3-8A2A-9D36F9AB7BB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F682B4F-6E68-4AF3-8A2A-9D36F9AB7BB9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{07EF13CD-5BAD-4989-BEA8-0369E735954C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{07EF13CD-5BAD-4989-BEA8-0369E735954C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{07EF13CD-5BAD-4989-BEA8-0369E735954C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{07EF13CD-5BAD-4989-BEA8-0369E735954C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
