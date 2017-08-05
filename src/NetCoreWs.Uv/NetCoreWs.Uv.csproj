@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard1.6</TargetFramework>
+    <RuntimeFrameworkVersion>1.0.5</RuntimeFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -9,6 +10,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NetCoreUv" Version="1.0.0" />
+    <ProjectReference Include="..\NetCoreWs\NetCoreWs.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NetCoreUv" Version="1.0.1" />
   </ItemGroup>
 </Project>

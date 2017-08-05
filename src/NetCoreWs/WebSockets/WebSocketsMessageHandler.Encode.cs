@@ -41,7 +41,7 @@ namespace NetCoreWs.WebSockets
             {
                 payloadLenAndMask = (byte) payloadDataLen;
             }
-            else if (payloadDataLen <= 65536)
+            else
             {
                 payloadLenAndMask = 126;
             }

@@ -3,7 +3,7 @@ using NetCoreWs.Core;
 
 namespace NetCoreWs.WebSockets
 {
-    abstract public partial class WebSocketsMessageHandler : MessageHandler<WebSocketFrame>
+    abstract public partial class WebSocketsMessageHandler : HandshakeMessageHandler<WebSocketFrame>
     {
         [ThreadStatic] static private byte[] _maskBytes;
         

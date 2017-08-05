@@ -12,8 +12,7 @@ namespace NetCoreWs.Core
 
         public void SendMessage(TMsg message)
         {
-            // TODO: 
-            ByteBuf outByteBuf = null;
+            ByteBuf outByteBuf = Channel.GetByteBufProvider().GetBuffer();
             
             Encode(message, outByteBuf);
             

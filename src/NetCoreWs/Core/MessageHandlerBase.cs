@@ -1,16 +1,19 @@
 ﻿using NetCoreWs.Buffers;
+using NetCoreWs.Channels;
 
 namespace NetCoreWs.Core
 {
     abstract public class MessageHandlerBase
     {
-        private MessageChannelBase _messageChannel;
+        protected ChannelBase Channel;
 
+        abstract protected void ChannelActivated();
+        
         abstract protected void HandleMessage(ByteBuf byteBuf);
         
-        public void Init(MessageChannelBase messageChannel)
+        public void Init(ChannelBase channel)
         {
-            _messageChannel = messageChannel;
+            Channel = channel;
         }
         
         public void ByteMessageReceived(ByteBuf byteBuf)
@@ -20,7 +23,7 @@ namespace NetCoreWs.Core
 
         protected void SendByteMessage(ByteBuf byteBuf)
         {
-            _messageChannel.Send(byteBuf);
+            Channel.Send(byteBuf);
         }
     }
 }

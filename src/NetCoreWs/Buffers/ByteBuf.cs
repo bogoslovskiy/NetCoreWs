@@ -14,7 +14,7 @@
 //
         abstract public int ReadableBytes();
 //
-//        abstract public void Back(int offset);
+        abstract public void Back(int offset);
 //
         abstract public byte ReadByte();
 //
@@ -32,27 +32,28 @@
 
             abstract public ByteBuf SliceFromCurrentReadPosition(int len);
 //
-//        abstract public int ReadToOrRollback(
-//            byte stopByte,
-//            byte[] output,
-//            int startIndex,
-//            int len);
+        abstract public int ReadToOrRollback(
+            byte stopByte,
+            byte[] output,
+            int startIndex,
+            int len);
+
+        abstract public int ReadToOrRollback(
+            byte stopByte1,
+            byte stopByte2,
+            byte[] output,
+            int startIndex,
+            int len);
 //
-//        abstract public int ReadToOrRollback(
-//            byte stopByte1,
-//            byte stopByte2,
-//            byte[] output,
-//            int startIndex,
-//            int len);
-//
-//        abstract public int SkipTo(byte stopByte, bool include);
-//
-//        abstract public int SkipTo(byte stopByte1, byte stopByte2, bool include);
+        abstract public int SkipTo(byte stopByte, bool include);
+
+        abstract public int SkipTo(byte stopByte1, byte stopByte2, bool include);
 //
         abstract public int WritableBytes();
 //        
         abstract public void Write(byte value);
 
+        abstract public string Dump();
 //
 //        // TODO: write*
     }
