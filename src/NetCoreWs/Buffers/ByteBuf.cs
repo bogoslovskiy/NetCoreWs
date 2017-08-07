@@ -30,7 +30,6 @@
 //
         abstract public ulong ReadULong();
 
-            abstract public ByteBuf SliceFromCurrentReadPosition(int len);
 //
         abstract public int ReadToOrRollback(
             byte stopByte,
@@ -53,7 +52,7 @@
 //        
         abstract public void Write(byte value);
 
-        abstract public string Dump();
+        abstract public string Dump(System.Text.Encoding encoding);
 //
 //        // TODO: write*
     }

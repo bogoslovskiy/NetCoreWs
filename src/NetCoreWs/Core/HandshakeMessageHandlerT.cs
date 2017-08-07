@@ -38,6 +38,7 @@ namespace NetCoreWs.Core
             throw new InvalidOperationException("Handshake before use.");
         }
 
+        // TODO: реализовать вызов при реализации клиентского канала.
         protected sealed override void ChannelActivated()
         {
             _channelType = Channel.GetChannelType();

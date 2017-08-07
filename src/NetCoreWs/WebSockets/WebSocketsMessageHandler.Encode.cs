@@ -9,7 +9,7 @@ namespace NetCoreWs.WebSockets
         
         protected override void Encode(WebSocketFrame message, ByteBuf outByteBuf)
         {
-            int payloadDataLen = message.ByteBuf.ReadableBytes();
+            int payloadDataLen = message.DataLen;
 
             if (payloadDataLen > 65535)
             {
@@ -77,11 +77,11 @@ namespace NetCoreWs.WebSockets
             {
                 if (_useMask)
                 {
-                    outByteBuf.Write((byte)(message.ByteBuf.ReadByte() ^ _maskBytes[i % 4]));
+                    outByteBuf.Write((byte)(message.BinaryData[i] ^ _maskBytes[i % 4]));
                 }
                 else
                 {
-                    outByteBuf.Write(message.ByteBuf.ReadByte());
+                    outByteBuf.Write(message.BinaryData[i]);
                 }
             }
         }

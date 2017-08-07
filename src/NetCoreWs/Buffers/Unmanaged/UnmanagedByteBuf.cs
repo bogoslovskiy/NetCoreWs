@@ -1,77 +1,34 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using NetCoreWs.Utils;
 
 namespace NetCoreWs.Buffers.Unmanaged
 {
-    // TODO: добавить и прописать нормальные типы исключений
     public class UnmanagedByteBuf : ByteBuf
     {
-        private struct State
-        {
-            public IntPtr MemSegPtr;
-            public int MemSegSize;
-            unsafe public byte* MemSegDataPtr;
-            public int GlobalReaded;
-            public int GlobalWrited;
-
-            unsafe public State(
-                IntPtr memSegPtr,
-                int memSegSize,
-                byte* memSegDataPtr,
-                int globalReadIndex,
-                int globalWriteIndex)
-            {
-                MemSegPtr = memSegPtr;
-                MemSegSize = memSegSize;
-                MemSegDataPtr = memSegDataPtr;
-                GlobalReaded = globalReadIndex;
-                GlobalWrited = globalWriteIndex;
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public int RemainBytes()
-            {
-                return GlobalWrited - GlobalReaded;
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Back(int offset)
-            {
-                GlobalReaded -= offset;
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            unsafe public byte ReadByte()
-            {
-                GlobalReaded++;
-
-                return MemSegDataPtr[GlobalReaded];
-            }
-        }
-
-        // TODO: заменить на интерфейс? 
-        //private readonly UnmanagedByteBufAllocator _allocator;
-
+        private readonly UnmanagedByteBufProvider _provider;
+        
         private IntPtr _memSegPtr;
         private int _memSegSize;
         unsafe private byte* _memSegDataPtr;
 
-        private int _globalReaded;
-        private int _globalWrited;
+        private int _readed;
+        private int _writed;
         
-        public UnmanagedByteBuf(IntPtr memPtr, int len)
+        public UnmanagedByteBuf(UnmanagedByteBufProvider provider)
         {
-            _memSegSize = len;
-            _memSegPtr = memPtr;
-            unsafe
-            {
-                _memSegDataPtr = (byte*) (void*) _memSegPtr;
-            }
-            _globalReaded = -1;
-            _globalWrited = -1;
+            _provider = provider;
         }
+        
+//        _memSegSize = len;
+//        
+//        _memSegPtr = memPtr;
+//        unsafe
+//        {
+//            _memSegDataPtr = (byte*) (void*) _memSegPtr;
+//        }
+//        _readed = -1;
+//        _writed = -1;
         
 //        public UnmanagedByteBuf(UnmanagedByteBufAllocator allocator)
 //        {
@@ -95,17 +52,16 @@ namespace NetCoreWs.Buffers.Unmanaged
 //            // Сам объект в пул вернуть не можем, т.к. он уничтожается сборщиком.
 //        }
 
-        public void Attach(IntPtr memSeg)
+        public void Attach(IntPtr memSegPtr, int len)
         {
-            _memSegPtr = memSeg;
-            //_lastMemSegPtr = memSeg;
+            _memSegPtr = memSegPtr;
             unsafe
             {
-                _memSegDataPtr = (byte*) (void*) memSeg;
+                _memSegDataPtr = (byte*) (void*) memSegPtr;
             }
-//            _memSegSize = MemorySegment.GetUsed(memSeg);
-            _globalReaded = -1;
-            _globalWrited = -1;
+            _memSegSize = len;
+            _readed = -1;
+            _writed = -1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -113,14 +69,14 @@ namespace NetCoreWs.Buffers.Unmanaged
         {
             // Учитывая то, кто использует этот метод, тут никогда не будет других чтений и никогда не будет больше
             // одного сегмента.
-            length = _globalWrited + 1;
+            length = _writed + 1;
             dataPtr = _memSegPtr;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetWrite(int write)
         {
-            _globalWrited = write - 1;
+            _writed = write - 1;
         }
 
 //        // TODO: Проверки (например, что присоединяем буфер, который не начали читать).
@@ -180,21 +136,21 @@ namespace NetCoreWs.Buffers.Unmanaged
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadableBytes()
         {
-            return _globalWrited - _globalReaded;
+            return _writed - _readed;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void Back(int offset)
         {
-            _globalReaded -= offset;
+            _readed -= offset;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public override byte ReadByte()
         {
-            _globalReaded++;
+            _readed++;
 
-            return _memSegDataPtr[_globalReaded];
+            return _memSegDataPtr[_readed];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -267,25 +223,19 @@ namespace NetCoreWs.Buffers.Unmanaged
             return ByteConverters.GetULong(b1, b2, b3, b4, b5, b6, b7, b8);
         }
 
-        public override ByteBuf SliceFromCurrentReadPosition(int len)
-        {
-            // TODO: !!!!
-            return this;
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadToOrRollback(byte stopByte, byte[] output, int startIndex, int len)
         {
             bool stopByteMatched = false;
 
+            int allReaded = 0;
             int readed = 0;
 
-            State state = GetState();
-
-            while (state.RemainBytes() > 0)
+            while (ReadableBytes() > 0)
             {
-                byte currentByte = state.ReadByte();
-
+                byte currentByte = ReadByte();
+                allReaded++;
+                
                 if (currentByte == stopByte)
                 {
                     stopByteMatched = true;
@@ -304,10 +254,11 @@ namespace NetCoreWs.Buffers.Unmanaged
 
             if (stopByteMatched)
             {
-                state.Back(1);
-                SetState(state);
+                Back(1);
                 return readed;
             }
+            
+            Back(allReaded);
 
             return -1;
         }
@@ -318,13 +269,13 @@ namespace NetCoreWs.Buffers.Unmanaged
             bool stopByte1Matched = false;
             bool stopBytesMatched = false;
 
+            int allReaded = 0;
             int readed = 0;
 
-            State state = GetState();
-
-            while (state.RemainBytes() > 0)
+            while (ReadableBytes() > 0)
             {
-                byte currentByte = state.ReadByte();
+                byte currentByte = ReadByte();
+                allReaded++;
 
                 if (currentByte == stopByte2)
                 {
@@ -354,10 +305,12 @@ namespace NetCoreWs.Buffers.Unmanaged
 
             if (stopBytesMatched)
             {
-                state.Back(2);
-                SetState(state);
+                Back(2);
+                
                 return readed;
             }
+            
+            Back(allReaded);
 
             return -1;
         }
@@ -368,12 +321,10 @@ namespace NetCoreWs.Buffers.Unmanaged
 
             bool stopByteMatched = false;
 
-            State state = GetState();
-
-            while (state.RemainBytes() > 0)
+            while (ReadableBytes() > 0)
             {
                 skipped++;
-                byte currentByte = state.ReadByte();
+                byte currentByte = ReadByte();
 
                 if (currentByte == stopByte)
                 {
@@ -387,12 +338,13 @@ namespace NetCoreWs.Buffers.Unmanaged
                 if (!include)
                 {
                     skipped -= 1;
-                    state.Back(1);
+                    Back(1);
                 }
-
-                SetState(state);
+                
                 return skipped;
             }
+            
+            Back(skipped);
 
             return -1;
         }
@@ -404,12 +356,10 @@ namespace NetCoreWs.Buffers.Unmanaged
             bool stopByte1Matched = false;
             bool stopBytesMatched = false;
 
-            State state = GetState();
-
-            while (state.RemainBytes() > 0)
+            while (ReadableBytes() > 0)
             {
                 skipped++;
-                byte currentByte = state.ReadByte();
+                byte currentByte = ReadByte();
 
                 if (currentByte == stopByte2)
                 {
@@ -433,57 +383,35 @@ namespace NetCoreWs.Buffers.Unmanaged
                 if (!include)
                 {
                     skipped -= 2;
-                    state.Back(2);
+                    Back(2);
                 }
 
-                SetState(state);
                 return skipped;
             }
 
+            Back(skipped);
+            
             return -1;
         }
 
         public override int WritableBytes()
         {
-            // TODO: Запись пока что невозможна в цепочку сегментов.
-            return _memSegSize - _globalWrited - 1;
+            return _memSegSize - _writed - 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public override void Write(byte @byte)
         {
-            _globalWrited++;
+            _writed++;
 
-            _memSegDataPtr[_globalWrited] = @byte;
+            _memSegDataPtr[_writed] = @byte;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        unsafe private State GetState()
-        {
-            return new State(
-                _memSegPtr,
-                _memSegSize,
-                _memSegDataPtr,
-                _globalReaded,
-                _globalWrited
-            );
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        unsafe private void SetState(State state)
-        {
-            _memSegPtr = state.MemSegPtr;
-            _memSegSize = state.MemSegSize;
-            _memSegDataPtr = state.MemSegDataPtr;
-            _globalReaded = state.GlobalReaded;
-            _globalWrited = state.GlobalWrited;
-        }
-
-        unsafe public override string Dump()
+        unsafe public override string Dump(System.Text.Encoding encoding)
         {
             int readable = ReadableBytes();
 
-            int index = _globalReaded;
+            int index = _readed;
 
             byte[] bytes = new byte[readable];
 
@@ -495,7 +423,7 @@ namespace NetCoreWs.Buffers.Unmanaged
                 i++;
             }
 
-            return System.Text.Encoding.ASCII.GetString(bytes);
+            return encoding.GetString(bytes);
         }
 
         //        

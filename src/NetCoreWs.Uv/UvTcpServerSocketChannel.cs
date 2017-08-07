@@ -40,7 +40,7 @@ namespace NetCoreWs.Uv
             
             unmanagedByteBuf.GetReadable(out IntPtr ptr, out int len);
 
-            Console.WriteLine(unmanagedByteBuf.Dump());
+            Console.WriteLine(unmanagedByteBuf.Dump(System.Text.Encoding.ASCII));
 
             var buf = new UvNative.uv_buf_t(ptr, len, PlatformApis.IsWindows);
 
@@ -82,7 +82,7 @@ namespace NetCoreWs.Uv
         {
             if (status > 0)
             {
-                UnmanagedByteBuf byteBuf = new UnmanagedByteBuf(buf.Memory, buf.Len);
+                UnmanagedByteBuf byteBuf = _byteBufProvider.WrapMemorySegment(buf.Memory, buf.Len);
                 byteBuf.SetWrite(status);
 
                 Receive(byteBuf);

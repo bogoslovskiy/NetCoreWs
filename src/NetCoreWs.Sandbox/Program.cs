@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using NetCoreWs.Buffers;
 using NetCoreWs.Core;
 using NetCoreWs.Uv;
@@ -30,12 +31,32 @@ namespace NetCoreWs.Sandbox
 
         protected override void OnMessageReceived(WebSocketFrame message)
         {
-            Console.WriteLine($"WebSockets frame received {message.ByteBuf.Dump()}");
+            byte[] data = new byte[message.DataLen];
+            for (int i = 0; i < message.DataLen; i++)
+            {
+                data[i] = message.BinaryData[i];
+            }
+
+            string messageStr = System.Text.Encoding.UTF8.GetString(data);
+            Console.WriteLine($"WebSockets frame received '{messageStr}'");
+
+            string response = $"Your message is '{messageStr}'";
+            
+            WebSocketFrame responseFrame = new WebSocketFrame();
+            responseFrame.Type = WebSocketFrameType.Text;
+            responseFrame.IsFinal = true;
+            responseFrame.DataLen = response.Length;
+            responseFrame.BinaryData = System.Text.Encoding.UTF8.GetBytes(response);
+            
+            SendMessage(responseFrame);
         }
 
         protected override void SetMask(byte[] maskBytes)
         {
-            throw new NotImplementedException();
+            maskBytes[0] = 123;
+            maskBytes[1] = 231;
+            maskBytes[2] = 77;
+            maskBytes[3] = 149;
         }
     }
     

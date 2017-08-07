@@ -1,6 +1,4 @@
-﻿using NetCoreWs.Buffers;
-
-namespace NetCoreWs.WebSockets
+﻿namespace NetCoreWs.WebSockets
 {
     public class WebSocketFrame
     {
@@ -8,6 +6,8 @@ namespace NetCoreWs.WebSockets
 
         public bool IsFinal { get; set; }
 
-        public ByteBuf ByteBuf { get; set; }
+        public byte[] BinaryData { get; set; }
+
+        public int DataLen { get; set; }
     }
 }

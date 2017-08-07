@@ -34,11 +34,29 @@ namespace NetCoreWs.WebSockets
             {
                 throw new UnexpectedEndOfBufferException();
             }
+
+            // TODO: provider
+            byte[] binaryData = new byte[4096];
+            
+            for (int i = 0; i < payloadLen; i++)
+            {
+                if (useMask)
+                {
+                    binaryData[i] = (byte)(inByteBuf.ReadByte() ^ _maskBytes[i % 4]);
+                }
+                else
+                {
+                    binaryData[i] = inByteBuf.ReadByte();
+                }
+            }
             
             var frame = new WebSocketFrame();
             frame.IsFinal = fin;
             frame.Type = WebSocketUtils.GetFrameType(opCode);
-            frame.ByteBuf = inByteBuf.SliceFromCurrentReadPosition(payloadLen);
+            frame.BinaryData = binaryData;
+            frame.DataLen = payloadLen;
+            
+            // TODO: release input byte buf
 
             return frame;
         }
