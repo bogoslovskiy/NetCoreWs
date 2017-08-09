@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using NetCoreWs.Buffers;
 
-namespace NetCoreWs.WebSockets
+namespace NetCoreWs.WebSockets.Handshake
 {
     static public class SwitchingProtocolResponse
     {

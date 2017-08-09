@@ -1,42 +1,45 @@
 ﻿using System;
-using System.Threading.Tasks;
 using NetCoreWs.Buffers;
 using NetCoreWs.Core;
 
-namespace NetCoreWs.WebSockets
+namespace NetCoreWs.WebSockets.Handshake
 {
-    abstract public partial class WebSocketsMessageHandler
+    public class WebSocketsServerHandshakeHandler : SimplexUpstreamMessageHandler<ByteBuf>
     {
         static private readonly int ConnectionHeaderLen = HttpHeaderConstants.ConnectionLower.Length;
         static private readonly int UpgradeHeaderLen = HttpHeaderConstants.UpgradeLower.Length;
         static private readonly int SecWebSocketVersionHeaderLen = HttpHeaderConstants.SecWebsocketVersionLower.Length;
         static private readonly int SecWebSocketKeyHeaderLen = HttpHeaderConstants.SecWebsocketKeyLower.Length;
         
-        private bool _connectionHeaderMatched;
-        private bool _connectionHeaderValueMatched;
-        private bool _upgradeHeaderMatched;
-        private bool _upgradeHeaderValueMatched;
-        private bool _secWebSocketVersionHeaderMatched;
-        private bool _secWebSocketVersionHeaderValueMatched;
-        private bool _secWebSocketKeyHeaderMatched;
-        private bool _secWebSocketKeyHeaderValueMatched;
+        private const int ConnectionHeaderMask = 1;
+        private const int ConnectionHeaderValueMask = 1 << 1;
+        private const int UpgradeHeaderMask = 1 << 2;
+        private const int UpgradeHeaderValueMask = 1 << 3;
+        private const int SecWebSocketVersionHeaderMask = 1 << 4;
+        private const int SecWebSocketVersionHeaderValueMask = 1 << 5;
+        private const int SecWebSocketKeyHeaderMask = 1 << 6;
+        private const int SecWebSocketKeyHeaderValueMask = 1 << 7;
+        
+        private byte _headerNameValueMatchBits;
+        
         private byte[] _key = new byte[92];
         private int _keyLen;
         
-        protected override void ServerReceiveHandshake(ByteBuf inByteBuf)
+        protected override void HandleUpstreamMessage(ByteBuf message)
         {
-            SkipToCrLf(inByteBuf);
+            _headerNameValueMatchBits = 0;
+            
+            SkipToCrLf(message);
 
-            bool handshaked = HandshakeMatched();
-
+            bool handshaked = _headerNameValueMatchBits == byte.MaxValue;
             if (handshaked)
             {
-                ByteBuf outByteBuf = Channel.GetByteBufProvider().GetBuffer();
+                ByteBuf outByteBuf = this.Pipeline.ChannelByteBufProvider.GetBuffer();
                 SwitchingProtocolResponse.Get(outByteBuf, _key, _keyLen);
 
-                SendByteMessage(outByteBuf);
-
-                Handshaked = true;
+                this.Pipeline.DeactivateHandler(this);
+                
+                DownstreamMessageHandled(outByteBuf);
             }
             else
             {
@@ -44,23 +47,10 @@ namespace NetCoreWs.WebSockets
                 throw new Exception();
             }
         }
-        
-        private bool HandshakeMatched()
-        {
-            return
-                _connectionHeaderMatched &
-                _connectionHeaderValueMatched &
-                _upgradeHeaderMatched &
-                _upgradeHeaderValueMatched &
-                _secWebSocketVersionHeaderMatched &
-                _secWebSocketVersionHeaderValueMatched &
-                _secWebSocketKeyHeaderMatched &
-                _secWebSocketKeyHeaderValueMatched;
-        }
 
-        private void SkipToCrLf(ByteBuf inByteBuf)
+        private void SkipToCrLf(ByteBuf message)
         {
-            int skipped = inByteBuf.SkipTo(
+            int skipped = message.SkipTo(
                 HttpHeaderConstants.CR /* stopByte1 */,
                 HttpHeaderConstants.LF /* stopByte2 */,
                 true /* include */
@@ -72,22 +62,22 @@ namespace NetCoreWs.WebSockets
                 throw new HandshakeException("");
             }
 
-            CrLf(inByteBuf);
+            CrLf(message);
         }
 
-        private void CrLf(ByteBuf inByteBuf)
+        private void CrLf(ByteBuf message)
         {
             // Далее как минимум должны следовать либо 2 байта CRLF, либо следующий заголовок со значением,
             // где тоже должно быть гораздо больше байт, с учетом того,
             // что название и значение разделено 2 байтами ": ".
-            if (inByteBuf.ReadableBytes() < 2)
+            if (message.ReadableBytes() < 2)
             {
                 return;
             }
 
             // Читаем следующие 2 байта.
-            byte nextByte1 = inByteBuf.ReadByte();
-            byte nextByte2 = inByteBuf.ReadByte();
+            byte nextByte1 = message.ReadByte();
+            byte nextByte2 = message.ReadByte();
 
             // Если CRLF - значит это второй CRLF, который по стандарту означает начало тела HTTP.
             // Но в нашем случае, тело нас не интересует, мы прочитали заголовки.
@@ -111,12 +101,12 @@ namespace NetCoreWs.WebSockets
 
             // Если далее идут не CRLF, значит идет следующий заголовок.
             // Возвращаем чтение буфера на 2 байта обратно.
-            inByteBuf.Back(2);
+            message.Back(2);
 
-            MatchHeaderName(inByteBuf);
+            MatchHeaderName(message);
         }
 
-        private void MatchHeaderName(ByteBuf inByteBuf)
+        private void MatchHeaderName(ByteBuf message)
         {
             bool colonAndWhitespace = false;
             bool crlf = false;
@@ -124,32 +114,32 @@ namespace NetCoreWs.WebSockets
 
             bool firstByte = false;
             bool lastByteIsColon = false;
-            bool lastByteIsCR = false;
+            bool lastByteIsCr = false;
             int index = 0;
 
-            bool _localConnectionHeaderMatched = false;
-            bool _localUpgradeHeaderMatched = false;
-            bool _localSecWebSocketVersionHeaderMatched = false;
-            bool _localSecWebSocketKeyHeaderMatched = false;
+            bool localConnectionHeaderMatched = false;
+            bool localUpgradeHeaderMatched = false;
+            bool localSecWebSocketVersionHeaderMatched = false;
+            bool localSecWebSocketKeyHeaderMatched = false;
 
             bool skipConnectionHeader = false;
             bool skipUpgradeHeader = false;
             bool skipSecWebSocketVersionHeader = false;
             bool skipSecWebSocketKeyHeader = false;
 
-            while (inByteBuf.ReadableBytes() > 0)
+            while (message.ReadableBytes() > 0)
             {
                 if (!firstByte)
                 {
                     firstByte = true;
 
-                    _localConnectionHeaderMatched = true;
-                    _localUpgradeHeaderMatched = true;
-                    _localSecWebSocketVersionHeaderMatched = true;
-                    _localSecWebSocketKeyHeaderMatched = true;
+                    localConnectionHeaderMatched = true;
+                    localUpgradeHeaderMatched = true;
+                    localSecWebSocketVersionHeaderMatched = true;
+                    localSecWebSocketKeyHeaderMatched = true;
                 }
 
-                byte nextByte = inByteBuf.ReadByte();
+                byte nextByte = message.ReadByte();
 
                 #region ": "
 
@@ -182,7 +172,7 @@ namespace NetCoreWs.WebSockets
 
                 if (nextByte == HttpHeaderConstants.LF)
                 {
-                    if (lastByteIsCR)
+                    if (lastByteIsCr)
                     {
                         crlf = true;
                         break;
@@ -194,12 +184,12 @@ namespace NetCoreWs.WebSockets
                 }
                 if (nextByte == HttpHeaderConstants.CR)
                 {
-                    lastByteIsCR = true;
+                    lastByteIsCr = true;
                     continue;
                 }
                 else
                 {
-                    lastByteIsCR = false;
+                    lastByteIsCr = false;
                     crlf = false;
                 }
 
@@ -209,11 +199,11 @@ namespace NetCoreWs.WebSockets
 
                 if (!skipConnectionHeader)
                 {
-                    _localConnectionHeaderMatched &=
+                    localConnectionHeaderMatched &=
                         ConnectionHeaderLen > index &&
                         (nextByte == HttpHeaderConstants.ConnectionLower[index] ||
                          nextByte == HttpHeaderConstants.ConnectionUpper[index]);
-                    if (!_localConnectionHeaderMatched)
+                    if (!localConnectionHeaderMatched)
                     {
                         skipConnectionHeader = true;
                     }
@@ -221,11 +211,11 @@ namespace NetCoreWs.WebSockets
 
                 if (!skipUpgradeHeader)
                 {
-                    _localUpgradeHeaderMatched &=
+                    localUpgradeHeaderMatched &=
                         UpgradeHeaderLen > index &&
                         (nextByte == HttpHeaderConstants.UpgradeLower[index] ||
                          nextByte == HttpHeaderConstants.UpgradeUpper[index]);
-                    if (!_localUpgradeHeaderMatched)
+                    if (!localUpgradeHeaderMatched)
                     {
                         skipUpgradeHeader = true;
                     }
@@ -233,11 +223,11 @@ namespace NetCoreWs.WebSockets
 
                 if (!skipSecWebSocketVersionHeader)
                 {
-                    _localSecWebSocketVersionHeaderMatched &=
+                    localSecWebSocketVersionHeaderMatched &=
                         SecWebSocketVersionHeaderLen > index &&
                         (nextByte == HttpHeaderConstants.SecWebsocketVersionLower[index] ||
                          nextByte == HttpHeaderConstants.SecWebsocketVersionUpper[index]);
-                    if (!_localSecWebSocketVersionHeaderMatched)
+                    if (!localSecWebSocketVersionHeaderMatched)
                     {
                         skipSecWebSocketVersionHeader = true;
                     }
@@ -245,11 +235,11 @@ namespace NetCoreWs.WebSockets
 
                 if (!skipSecWebSocketKeyHeader)
                 {
-                    _localSecWebSocketKeyHeaderMatched &=
+                    localSecWebSocketKeyHeaderMatched &=
                         SecWebSocketKeyHeaderLen > index &&
                         (nextByte == HttpHeaderConstants.SecWebsocketKeyLower[index] ||
                          nextByte == HttpHeaderConstants.SecWebsocketKeyUpper[index]);
-                    if (!_localSecWebSocketKeyHeaderMatched)
+                    if (!localSecWebSocketKeyHeaderMatched)
                     {
                         skipSecWebSocketKeyHeader = true;
                     }
@@ -258,10 +248,10 @@ namespace NetCoreWs.WebSockets
                 #endregion
 
                 allNotMatched =
-                    !_localConnectionHeaderMatched &&
-                    !_localUpgradeHeaderMatched &&
-                    !_localSecWebSocketVersionHeaderMatched &&
-                    !_localSecWebSocketKeyHeaderMatched;
+                    !localConnectionHeaderMatched &&
+                    !localUpgradeHeaderMatched &&
+                    !localSecWebSocketVersionHeaderMatched &&
+                    !localSecWebSocketKeyHeaderMatched;
                 if (allNotMatched)
                 {
                     break;
@@ -277,18 +267,18 @@ namespace NetCoreWs.WebSockets
 
             if (allNotMatched)
             {
-                SkipToCrLf(inByteBuf);
+                SkipToCrLf(message);
                 return;
             }
 
             if (colonAndWhitespace)
             {
-                if (_localConnectionHeaderMatched)
+                if (localConnectionHeaderMatched)
                 {
-                    _connectionHeaderMatched = true;
+                    _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | ConnectionHeaderMask);
                     
                     MatchHeaderValue(
-                        inByteBuf,
+                        message,
                         HttpHeaderConstants.UpgradeLower,
                         HttpHeaderConstants.UpgradeUpper,
                         out bool macthed,
@@ -298,28 +288,29 @@ namespace NetCoreWs.WebSockets
 
                     if (macthed)
                     {
-                        _connectionHeaderValueMatched = true;
+                        _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | ConnectionHeaderValueMask);
+                        
                         if (valueEndWithCrlf)
                         {
-                            CrLf(inByteBuf);
+                            CrLf(message);
                         }
                         else
                         {
-                            SkipToCrLf(inByteBuf);
+                            SkipToCrLf(message);
                         }
                     }
 
                     if (notMatched)
                     {
-                        _connectionHeaderValueMatched = false;
+                        _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits & ~ConnectionHeaderValueMask);
                     }
                 }
-                else if (_localUpgradeHeaderMatched)
+                else if (localUpgradeHeaderMatched)
                 {
-                    _upgradeHeaderMatched = true;
+                    _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | UpgradeHeaderMask);
                     
                     MatchHeaderValue(
-                        inByteBuf,
+                        message,
                         HttpHeaderConstants.WebsocketLower,
                         HttpHeaderConstants.WebsocketUpper,
                         out bool macthed,
@@ -329,28 +320,28 @@ namespace NetCoreWs.WebSockets
 
                     if (macthed)
                     {
-                        _upgradeHeaderValueMatched = true;
+                        _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | UpgradeHeaderValueMask);
                         if (valueEndWithCrlf)
                         {
-                            CrLf(inByteBuf);
+                            CrLf(message);
                         }
                         else
                         {
-                            SkipToCrLf(inByteBuf);
+                            SkipToCrLf(message);
                         }
                     }
 
                     if (notMatched)
                     {
-                        _upgradeHeaderValueMatched = false;
+                        _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits & ~UpgradeHeaderValueMask);
                     }
                 }
-                else if (_localSecWebSocketVersionHeaderMatched)
+                else if (localSecWebSocketVersionHeaderMatched)
                 {
-                    _secWebSocketVersionHeaderMatched = true;
+                    _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | SecWebSocketVersionHeaderMask);
                     
                     MatchHeaderValue(
-                        inByteBuf,
+                        message,
                         HttpHeaderConstants.Version13,
                         HttpHeaderConstants.Version13,
                         out bool macthed,
@@ -360,36 +351,38 @@ namespace NetCoreWs.WebSockets
 
                     if (macthed)
                     {
-                        _secWebSocketVersionHeaderValueMatched = true;
+                        _headerNameValueMatchBits = 
+                            (byte)(_headerNameValueMatchBits | SecWebSocketVersionHeaderValueMask);
                         if (valueEndWithCrlf)
                         {
-                            CrLf(inByteBuf);
+                            CrLf(message);
                         }
                         else
                         {
-                            SkipToCrLf(inByteBuf);
+                            SkipToCrLf(message);
                         }
                     }
 
                     if (notMatched)
                     {
-                        _secWebSocketVersionHeaderValueMatched = false;
+                        _headerNameValueMatchBits = 
+                            (byte)(_headerNameValueMatchBits & ~SecWebSocketVersionHeaderValueMask);
                     }
                 }
-                else if (_localSecWebSocketKeyHeaderMatched)
+                else if (localSecWebSocketKeyHeaderMatched)
                 {
-                    _secWebSocketKeyHeaderMatched = true;
-                    SecWebSocketKey(inByteBuf);
+                    _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | SecWebSocketKeyHeaderMask);
+                    SecWebSocketKey(message);
                 }
                 else
                 {
-                    SkipToCrLf(inByteBuf);
+                    SkipToCrLf(message);
                 }
             }
         }
 
         private void MatchHeaderValue(
-            ByteBuf inByteBuf, 
+            ByteBuf message, 
             byte[] headerValueLower, 
             byte[] headerValueUpper,
             out bool matched,
@@ -404,14 +397,13 @@ namespace NetCoreWs.WebSockets
 
             int index = 0;
             bool firstByte = false;
-            // ReSharper disable once InconsistentNaming
-            bool lastByteIsCR = false;
+            bool lastByteIsCr = false;
 
             bool headerValueMatched = false;
             bool headerValueMatchedCurrent = false;
             bool skipToNextCommaAndWhitespace = false;
 
-            while (inByteBuf.ReadableBytes() > 0)
+            while (message.ReadableBytes() > 0)
             {
                 if (!firstByte)
                 {
@@ -422,13 +414,13 @@ namespace NetCoreWs.WebSockets
                     skipToNextCommaAndWhitespace = false;
                 }
 
-                byte nextByte = inByteBuf.ReadByte();
+                byte nextByte = message.ReadByte();
 
                 #region CRLF
 
                 if (nextByte == HttpHeaderConstants.LF)
                 {
-                    if (lastByteIsCR)
+                    if (lastByteIsCr)
                     {
                         crlf = true;
                         skipToNextCommaAndWhitespace = false;
@@ -440,11 +432,11 @@ namespace NetCoreWs.WebSockets
                 }
                 if (nextByte == HttpHeaderConstants.CR)
                 {
-                    lastByteIsCR = true;
+                    lastByteIsCr = true;
                     continue;
                 }
 
-                lastByteIsCR = false;
+                lastByteIsCr = false;
 
                 #endregion
 
@@ -492,9 +484,9 @@ namespace NetCoreWs.WebSockets
             }
         }
 
-        private void SecWebSocketKey(ByteBuf inByteBuf)
+        private void SecWebSocketKey(ByteBuf message)
         {
-            int read = inByteBuf.ReadToOrRollback(
+            int read = message.ReadToOrRollback(
                 HttpHeaderConstants.CR,
                 HttpHeaderConstants.LF,
                 _key /* output */,
@@ -510,13 +502,13 @@ namespace NetCoreWs.WebSockets
 
             // Если буфер смог дочитать до CRLF, значит в нем точно есть еще как минимум 2 байта CRLF.
             // Читаем их, чтобы сдвинуть.
-            inByteBuf.ReadByte();
-            inByteBuf.ReadByte();
+            message.ReadByte();
+            message.ReadByte();
 
-            _secWebSocketKeyHeaderValueMatched = true;
+            _headerNameValueMatchBits = (byte)(_headerNameValueMatchBits | SecWebSocketKeyHeaderValueMask);
             _keyLen = read;
 
-            CrLf(inByteBuf);
+            CrLf(message);
         }
     }
 }

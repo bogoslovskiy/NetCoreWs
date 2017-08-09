@@ -38,6 +38,8 @@ namespace NetCoreWs.Uv
             _uvTcpServerSocketChannels.Add(channel);
 
             channel.StartRead();
+            
+            channel.ActivateChannel();
         }
     }
 }

@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Threading;
-using NetCoreWs.Buffers;
-using NetCoreWs.Core;
-using NetCoreWs.Uv;
+using System.Threading.Tasks;
 using NetCoreWs.WebSockets;
-using Bootsrtapper = NetCoreWs.Core.Bootstrapper<
+using ServerBootsrtapper = NetCoreWs.Core.Bootstrapper<
     NetCoreWs.Uv.UvServerChannelBus,
     NetCoreWs.Uv.UvServerChannelBusParameters,
     NetCoreWs.Uv.UvTcpServerSocketChannel,
@@ -17,16 +14,6 @@ namespace NetCoreWs.Sandbox
         public WebSocketsHandler() 
             : base(false /* useMask */)
         {
-        }
-
-        protected override void ClientReceiveHandshake(ByteBuf inByteBuf)
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override void ClientSendHandshake(ByteBuf outByteBuf)
-        {
-            throw new NotImplementedException();
         }
 
         protected override void OnMessageReceived(WebSocketFrame message)
@@ -45,8 +32,8 @@ namespace NetCoreWs.Sandbox
             WebSocketFrame responseFrame = new WebSocketFrame();
             responseFrame.Type = WebSocketFrameType.Text;
             responseFrame.IsFinal = true;
-            responseFrame.DataLen = response.Length;
             responseFrame.BinaryData = System.Text.Encoding.UTF8.GetBytes(response);
+            responseFrame.DataLen = responseFrame.BinaryData.Length;
             
             SendMessage(responseFrame);
         }
@@ -64,7 +51,14 @@ namespace NetCoreWs.Sandbox
     {
         static void Main(string[] args)
         {
-            Bootsrtapper bootstrapper = Bootsrtapper
+            Task serverTask = Task.Factory.StartNew(() => StartServer());
+            
+            Console.ReadLine();
+        }
+
+        static void StartServer()
+        {
+            ServerBootsrtapper bootstrapper = ServerBootsrtapper
                 .UseChannel(
                     x =>
                     {
@@ -73,7 +67,7 @@ namespace NetCoreWs.Sandbox
                     },
                     x => { }
                 );
-            Bootsrtapper.UseHandler<WebSocketsHandler>(bootstrapper);
+            ServerBootsrtapper.UseHandler<WebSocketsHandler>(bootstrapper);
             
             bootstrapper.Bootstrapp().StartListening();
         }

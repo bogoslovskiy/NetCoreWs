@@ -29,7 +29,7 @@ namespace NetCoreWs.Channels
         {
             var channel = new TChannel();
             var messageHandler = _getHandler();
-            channel.Init(_initChannelParameters, messageHandler);
+            channel.Init(_initChannelParameters);
             messageHandler.Init(channel);
 
             return channel;
