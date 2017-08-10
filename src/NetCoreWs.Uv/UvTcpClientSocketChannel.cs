@@ -18,11 +18,6 @@ namespace NetCoreWs.Uv
         {
             UvTcpHandle = new UvTcpHandle();
         }
-        
-        public override ChannelType GetChannelType()
-        {
-            return ChannelType.Server;
-        }
 
         public override IByteBufProvider GetByteBufProvider()
         {
@@ -34,7 +29,7 @@ namespace NetCoreWs.Uv
             UvTcpHandle.Init(uvLoop);
         }
         
-        protected override void SendCore(ByteBuf byteBuf)
+        public override void Send(ByteBuf byteBuf)
         {
             var unmanagedByteBuf = (UnmanagedByteBuf) byteBuf;
             

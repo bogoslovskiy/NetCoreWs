@@ -11,34 +11,36 @@ namespace NetCoreWs.Core
     {
         private Action<TChannelBusParameters> _initChannelBusParameters;
         private Action<TChannelParameters> _initChannelParameters;
-        private Func<MessageHandlerBase> _getHandler;
-        
-        static public Bootstrapper<TChannelBus, TChannelBusParameters, TChannel, TChannelParameters> UseChannel(
+        private Action<IPipeline> _pipelineInitializer;
+
+        public void InitChannel(
             Action<TChannelBusParameters> initChannelBusParameters,
             Action<TChannelParameters> initChannelParameters)
         {
-            var bootstrapper = new Bootstrapper<TChannelBus, TChannelBusParameters, TChannel, TChannelParameters>();
-            bootstrapper._initChannelBusParameters = initChannelBusParameters;
-            bootstrapper._initChannelParameters = initChannelParameters;
-
-            return bootstrapper;
+            _initChannelBusParameters = initChannelBusParameters;
+            _initChannelParameters = initChannelParameters;
         }
 
-        static public Bootstrapper<TChannelBus, TChannelBusParameters, TChannel, TChannelParameters> UseHandler<TMessageHandler>(
-            Bootstrapper<TChannelBus, TChannelBusParameters, TChannel, TChannelParameters> bootstrapper)
-            where TMessageHandler : MessageHandlerBase, new()
+        public void InitPipeline(Action<IPipeline> pipelineInitializer)
         {
-            bootstrapper._getHandler = () => new TMessageHandler();
-            return bootstrapper;
+            _pipelineInitializer = pipelineInitializer;
         }
 
         public TChannelBus Bootstrapp()
         {
             var channelBus = new TChannelBus();
-            channelBus.Init(_initChannelBusParameters, _initChannelParameters, _getHandler);
-            _initChannelBusParameters(channelBus.Parameters);
+            channelBus.Init(_initChannelBusParameters, _initChannelParameters, CreatePipeline);
 
             return channelBus;
+        }
+
+        private IPipeline CreatePipeline()
+        {
+            IPipeline pipeline = new Pipeline();
+
+            _pipelineInitializer(pipeline);
+            
+            return pipeline;
         }
     }
 }

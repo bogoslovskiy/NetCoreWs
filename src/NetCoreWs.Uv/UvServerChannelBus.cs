@@ -23,8 +23,8 @@ namespace NetCoreWs.Uv
 
         public void StartListening()
         {
-            _listenUvTcpHandle.Bind(ServerAddress.FromUrl(Parameters.Url));
-            _listenUvTcpHandle.Listen(Parameters.ListenBacklog /* backLog */, ConnectionCallback);
+            _listenUvTcpHandle.Bind(ServerAddress.FromUrl(this.Parameters.Url));
+            _listenUvTcpHandle.Listen(this.Parameters.ListenBacklog /* backLog */, ConnectionCallback);
 
             _uvLoop.RunDefault();
         }
@@ -38,8 +38,6 @@ namespace NetCoreWs.Uv
             _uvTcpServerSocketChannels.Add(channel);
 
             channel.StartRead();
-            
-            channel.ActivateChannel();
         }
     }
 }

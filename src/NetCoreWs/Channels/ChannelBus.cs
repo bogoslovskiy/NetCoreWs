@@ -9,28 +9,29 @@ namespace NetCoreWs.Channels
         where TChannelParameters : class, new()
     {
         private Action<TChannelParameters> _initChannelParameters;
-        private Func<MessageHandlerBase> _getHandler;
+        private Func<IPipeline> _getPipeline;
 
         public TChannelBusParameters Parameters { get; private set; }
         
         public void Init(
             Action<TChannelBusParameters> initChannelBusParameters,
             Action<TChannelParameters> initChannelParameters, 
-            Func<MessageHandlerBase> getHandler)
+            Func<IPipeline> getPipeline)
         {
-            Parameters = new TChannelBusParameters();
-            initChannelBusParameters(Parameters);
+            this.Parameters = new TChannelBusParameters();
+            initChannelBusParameters(this.Parameters);
             
             _initChannelParameters = initChannelParameters;
-            _getHandler = getHandler;
+            _getPipeline = getPipeline;
         }
 
         protected TChannel CreateChannel()
         {
             var channel = new TChannel();
-            var messageHandler = _getHandler();
             channel.Init(_initChannelParameters);
-            messageHandler.Init(channel);
+            
+            IPipeline pipeline = _getPipeline();
+            pipeline.LinkChannel(channel);
 
             return channel;
         }

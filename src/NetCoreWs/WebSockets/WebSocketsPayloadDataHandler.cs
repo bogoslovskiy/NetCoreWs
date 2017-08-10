@@ -9,6 +9,11 @@ namespace NetCoreWs.WebSockets
         [ThreadStatic]
         static private byte[] _maskBytes;
         
+        public override void OnChannelActivated()
+        {
+            FireChannelActivated();
+        }
+        
         protected override void HandleUpstreamMessage(ByteBuf message)
         {
             _maskBytes = _maskBytes ?? new byte[4];
@@ -23,7 +28,7 @@ namespace NetCoreWs.WebSockets
             );
 
             // TODO: оптимизировать (возможно передавать тот же буфер)
-            ByteBuf payloadDataByteBuf = this.Pipeline.ChannelByteBufProvider.GetBuffer();
+            ByteBuf payloadDataByteBuf = this.Pipeline.GetBuffer();
 
             for (int i = 0; i < payloadLen; i++)
             {

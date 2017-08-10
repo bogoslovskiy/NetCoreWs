@@ -9,8 +9,8 @@ namespace NetCoreWs.Channels
         
         public void Init(Action<TChannelParameters> initChannelParameters)
         {
-            Parameters = new TChannelParameters();
-            initChannelParameters(Parameters);
+            this.Parameters = new TChannelParameters();
+            initChannelParameters(this.Parameters);
         }
     }
 }

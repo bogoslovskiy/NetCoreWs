@@ -5,9 +5,11 @@ namespace NetCoreWs.Core
 {
     public interface IPipeline
     {
-        ChannelBase Channel { get; }
+        void LinkChannel(ChannelBase channel);
         
-        IByteBufProvider ChannelByteBufProvider { get; }
+        void Add(MessageHandlerBase handler);
+        
+        ByteBuf GetBuffer();
 
         void DeactivateHandler(MessageHandlerBase handler);
     }

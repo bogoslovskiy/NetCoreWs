@@ -24,6 +24,10 @@ namespace NetCoreWs.WebSockets.Handshake
         
         private byte[] _key = new byte[92];
         private int _keyLen;
+
+        public override void OnChannelActivated()
+        {
+        }
         
         protected override void HandleUpstreamMessage(ByteBuf message)
         {
@@ -34,12 +38,14 @@ namespace NetCoreWs.WebSockets.Handshake
             bool handshaked = _headerNameValueMatchBits == byte.MaxValue;
             if (handshaked)
             {
-                ByteBuf outByteBuf = this.Pipeline.ChannelByteBufProvider.GetBuffer();
+                ByteBuf outByteBuf = this.Pipeline.GetBuffer();
                 SwitchingProtocolResponse.Get(outByteBuf, _key, _keyLen);
 
                 this.Pipeline.DeactivateHandler(this);
                 
                 DownstreamMessageHandled(outByteBuf);
+
+                FireChannelActivated();
             }
             else
             {

@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
+using NetCoreWs.Buffers;
+using NetCoreWs.Core;
 using NetCoreWs.WebSockets;
+using NetCoreWs.WebSockets.Handshake;
 using ServerBootsrtapper = NetCoreWs.Core.Bootstrapper<
     NetCoreWs.Uv.UvServerChannelBus,
     NetCoreWs.Uv.UvServerChannelBusParameters,
@@ -9,41 +12,23 @@ using ServerBootsrtapper = NetCoreWs.Core.Bootstrapper<
 
 namespace NetCoreWs.Sandbox
 {
-    public class WebSocketsHandler : WebSocketsMessageHandler
+    public class LogByteBuf : SimplexUpstreamMessageHandler<ByteBuf>
     {
-        public WebSocketsHandler() 
-            : base(false /* useMask */)
+        public override void OnChannelActivated()
         {
         }
 
-        protected override void OnMessageReceived(WebSocketFrame message)
+        protected override void HandleUpstreamMessage(ByteBuf message)
         {
-            byte[] data = new byte[message.DataLen];
-            for (int i = 0; i < message.DataLen; i++)
+            int readableBytes = message.ReadableBytes();
+            byte[] data = new byte[readableBytes];
+            for (int i = 0; i < readableBytes; i++)
             {
-                data[i] = message.BinaryData[i];
+                data[i] = message.ReadByte();
             }
 
             string messageStr = System.Text.Encoding.UTF8.GetString(data);
-            Console.WriteLine($"WebSockets frame received '{messageStr}'");
-
-            string response = $"Your message is '{messageStr}'";
-            
-            WebSocketFrame responseFrame = new WebSocketFrame();
-            responseFrame.Type = WebSocketFrameType.Text;
-            responseFrame.IsFinal = true;
-            responseFrame.BinaryData = System.Text.Encoding.UTF8.GetBytes(response);
-            responseFrame.DataLen = responseFrame.BinaryData.Length;
-            
-            SendMessage(responseFrame);
-        }
-
-        protected override void SetMask(byte[] maskBytes)
-        {
-            maskBytes[0] = 123;
-            maskBytes[1] = 231;
-            maskBytes[2] = 77;
-            maskBytes[3] = 149;
+            Console.WriteLine($"Message received '{messageStr}'");
         }
     }
     
@@ -58,18 +43,25 @@ namespace NetCoreWs.Sandbox
 
         static void StartServer()
         {
-            ServerBootsrtapper bootstrapper = ServerBootsrtapper
-                .UseChannel(
-                    x =>
-                    {
-                        x.Url = "http://127.0.0.1:5052";
-                        x.ListenBacklog = 100;
-                    },
-                    x => { }
-                );
-            ServerBootsrtapper.UseHandler<WebSocketsHandler>(bootstrapper);
+            var serverBootstrapper = new ServerBootsrtapper();
+            serverBootstrapper.InitChannel(
+                x =>
+                {
+                    x.Url = "http://127.0.0.1:5052";
+                    x.ListenBacklog = 100;
+                },
+                x => { }
+            );
+            serverBootstrapper.InitPipeline(
+                x =>
+                {
+                    x.Add(new WebSocketsServerHandshakeHandler());
+                    x.Add(new WebSocketsPayloadDataHandler());
+                    x.Add(new LogByteBuf());
+                }
+            );
             
-            bootstrapper.Bootstrapp().StartListening();
+            serverBootstrapper.Bootstrapp().StartListening();
         }
     }
 }
