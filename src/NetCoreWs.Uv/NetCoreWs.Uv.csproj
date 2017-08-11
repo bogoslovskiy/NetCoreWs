@@ -10,9 +10,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\NetCoreUv\src\NetCoreUv\NetCoreUv.csproj" />
     <ProjectReference Include="..\NetCoreWs\NetCoreWs.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="NetCoreUv" Version="1.0.1" />
   </ItemGroup>
 </Project>

@@ -10,6 +10,7 @@ namespace NetCoreWs.Uv
     public class UvTcpServerSocketChannel : ChannelBase<UvTcpServerSocketChannelParameters>
     {
         internal UvTcpHandle UvTcpHandle;
+        private UvWriteRequestT<UnmanagedByteBuf> _writeRequest;
         
         // TODO:
         private readonly UnmanagedByteBufProvider _byteBufProvider = new UnmanagedByteBufProvider(4096);
@@ -17,6 +18,7 @@ namespace NetCoreWs.Uv
         public UvTcpServerSocketChannel()
         {
             UvTcpHandle = new UvTcpHandle();
+            _writeRequest = new UvWriteRequestT<UnmanagedByteBuf>();
         }
 
         public override IByteBufProvider GetByteBufProvider()
@@ -27,6 +29,12 @@ namespace NetCoreWs.Uv
         internal void InitUv(UvLoopHandle uvLoop)
         {
             UvTcpHandle.Init(uvLoop);
+            _writeRequest.Init(WriteCallback);
+        }
+        
+        private void WriteCallback(UnmanagedByteBuf byteBuf)
+        {
+            byteBuf.Release();
         }
         
         public override void Send(ByteBuf byteBuf)
@@ -39,8 +47,11 @@ namespace NetCoreWs.Uv
 
             var buf = new UvNative.uv_buf_t(ptr, len, PlatformApis.IsWindows);
 
+            // TODO: thread safe
+            int writeResult = _writeRequest.Write(UvTcpHandle, buf, unmanagedByteBuf);
+            
             // TODO: обрабатывать статус с ошибкой.
-            int status = UvTcpHandle.TryWrite(buf);
+            //int status = UvTcpHandle.TryWrite(buf);
 
             // Освобождаем буфер.
             //byteBuf.Release();
