@@ -42,6 +42,9 @@ namespace NetCoreWs.WebSockets
                 payloadDataByteBuf.Write(@byte);
             }
             
+            // Освобождаем буфер.
+            message.Release();
+            
             UpstreamMessageHandled(payloadDataByteBuf);
         }
 
@@ -60,6 +63,9 @@ namespace NetCoreWs.WebSockets
                 false /* masked */,
                 payloadLen
             );
+            
+            // Освобождаем буфер.
+            message.Release();
             
             DownstreamMessageHandled(outByteBuf);
         }

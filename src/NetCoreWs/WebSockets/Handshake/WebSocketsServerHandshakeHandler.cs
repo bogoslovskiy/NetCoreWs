@@ -35,6 +35,9 @@ namespace NetCoreWs.WebSockets.Handshake
             
             SkipToCrLf(message);
 
+            // Освобождаем буфер.
+            message.Release();
+            
             bool handshaked = _headerNameValueMatchBits == byte.MaxValue;
             if (handshaked)
             {
