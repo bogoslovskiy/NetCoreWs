@@ -1,4 +1,5 @@
 ﻿using NetCoreWs.Buffers;
+using NetCoreWs.Utils;
 
 namespace NetCoreWs.WebSockets
 {
@@ -43,90 +44,90 @@ namespace NetCoreWs.WebSockets
             }
         }
 
-//        static public void Encode(
-//            ByteBuf byteBuf,
-//            byte[] maskBytes,
-//            WebSocketFrameType type,
-//            bool fin,
-//            bool masked,
-//            int payloadLen)
-//        {
-//            int payloadDataLen = message.DataLen;
-//
-//            if (payloadDataLen > 65535)
-//            {
-//                throw new LargeWebSocketFramesNotSupportedException(payloadDataLen);
-//            }
-//            
-//            int totalDataLen =
-//                2 /* mandatoryHeader */ +
-//                payloadDataLen /* payload */ +
-//                (_useMask ? 4 : 0) /* mask */ +
-//                (payloadDataLen <= 125 ? 0 : 2) /* ext payload */;
-//
-//            if (totalDataLen > outByteBuf.WritableBytes())
-//            {
-//                throw new NotEnoughAvailableBufferSizeToWriteException(outByteBuf.WritableBytes(), totalDataLen);
-//            }
-//            
-//            byte opCode = Utils.GetFrameOpCode(message.Type);
-//            if (message.IsFinal)
-//            {
-//                opCode = (byte)(opCode | Utils.MaskFin);
-//            }
-//
-//            outByteBuf.Write(opCode);
-//
-//            byte payloadLenAndMask;
-//
-//            if (payloadDataLen <= 125)
-//            {
-//                payloadLenAndMask = (byte) payloadDataLen;
-//            }
-//            else
-//            {
-//                payloadLenAndMask = 126;
-//            }
-//
-//            byte payloadLenByte = payloadLenAndMask;
-//
-//            if (_useMask)
-//            {
-//                payloadLenAndMask = (byte)(payloadLenAndMask | Utils.MaskMask);
-//                SetMask(_maskBytes);
-//            }
-//
-//            outByteBuf.Write(payloadLenAndMask);
-//
-//            if (payloadLenByte == 126)
-//            {
-//                ByteConverters.ByteUnion2 byteUnion2 = new ByteConverters.ByteUnion2();
-//                byteUnion2.UShort = (ushort)payloadDataLen;
-//                outByteBuf.Write(byteUnion2.B2);
-//                outByteBuf.Write(byteUnion2.B1);
-//            }
-//
-//            if (_useMask)
-//            {
-//                outByteBuf.Write(_maskBytes[3]);
-//                outByteBuf.Write(_maskBytes[2]);
-//                outByteBuf.Write(_maskBytes[1]);
-//                outByteBuf.Write(_maskBytes[0]);
-//            }
-//
-//            // TODO: оптимизация
-//            for (int i = 0; i < payloadDataLen; i++)
-//            {
-//                if (_useMask)
-//                {
-//                    outByteBuf.Write((byte)(message.BinaryData[i] ^ _maskBytes[i % 4]));
-//                }
-//                else
-//                {
-//                    outByteBuf.Write(message.BinaryData[i]);
-//                }
-//            }
-//        }
+        static public void Encode(
+            ByteBuf outByteBuf,
+            ByteBuf inByteBuf,
+            byte[] maskBytes,
+            WebSocketFrameType type,
+            bool fin,
+            bool masked,
+            int payloadLen)
+        {
+            if (payloadLen > 65535)
+            {
+                throw new LargeWebSocketFramesNotSupportedException(payloadLen);
+            }
+            
+            int totalDataLen =
+                2 /* mandatoryHeader */ +
+                payloadLen /* payload */ +
+                (masked ? 4 : 0) /* mask */ +
+                (payloadLen <= 125 ? 0 : 2) /* ext payload */;
+
+            if (totalDataLen > outByteBuf.WritableBytes())
+            {
+                throw new NotEnoughAvailableBufferSizeToWriteException(outByteBuf.WritableBytes(), totalDataLen);
+            }
+            
+            byte opCode = Utils.GetFrameOpCode(type);
+            if (fin)
+            {
+                opCode = (byte)(opCode | Utils.MaskFin);
+            }
+
+            outByteBuf.Write(opCode);
+
+            byte payloadLenAndMask;
+
+            if (payloadLen <= 125)
+            {
+                payloadLenAndMask = (byte) payloadLen;
+            }
+            else
+            {
+                payloadLenAndMask = 126;
+            }
+
+            byte payloadLenByte = payloadLenAndMask;
+
+            if (masked)
+            {
+                payloadLenAndMask = (byte)(payloadLenAndMask | Utils.MaskMask);
+            }
+
+            outByteBuf.Write(payloadLenAndMask);
+
+            if (payloadLenByte == 126)
+            {
+                ByteConverters.ByteUnion2 byteUnion2 = new ByteConverters.ByteUnion2();
+                byteUnion2.UShort = (ushort)payloadLen;
+                outByteBuf.Write(byteUnion2.B2);
+                outByteBuf.Write(byteUnion2.B1);
+            }
+
+            if (masked)
+            {
+                outByteBuf.Write(maskBytes[3]);
+                outByteBuf.Write(maskBytes[2]);
+                outByteBuf.Write(maskBytes[1]);
+                outByteBuf.Write(maskBytes[0]);
+            }
+
+            // TODO: оптимизация
+            for (int i = 0; i < payloadLen; i++)
+            {
+                byte @byte = inByteBuf.ReadByte();
+                
+                if (masked)
+                {
+                    outByteBuf.Write((byte)(@byte ^ maskBytes[i % 4]));
+                }
+                else
+                {
+                    outByteBuf.Write(@byte);
+                }
+            }
+        }
         
         static private int ReadExtPayloadLen(ByteBuf inByteBuf, int payloadLen)
         {

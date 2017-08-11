@@ -12,10 +12,11 @@ using ServerBootsrtapper = NetCoreWs.Core.Bootstrapper<
 
 namespace NetCoreWs.Sandbox
 {
-    public class LogByteBuf : SimplexUpstreamMessageHandler<ByteBuf>
+    public class LogByteBuf : DuplexMessageHandler<ByteBuf, ByteBuf>
     {
         public override void OnChannelActivated()
         {
+            FireChannelActivated();
         }
 
         protected override void HandleUpstreamMessage(ByteBuf message)
@@ -26,9 +27,44 @@ namespace NetCoreWs.Sandbox
             {
                 data[i] = message.ReadByte();
             }
-
+            
             string messageStr = System.Text.Encoding.UTF8.GetString(data);
             Console.WriteLine($"Message received '{messageStr}'");
+            
+            message.Back(readableBytes);
+            UpstreamMessageHandled(message);
+        }
+
+        protected override void HandleDownstreamMessage(ByteBuf message)
+        {
+            DownstreamMessageHandled(message);
+        }
+    }
+
+    public class EchoHandler : SimplexUpstreamMessageHandler<ByteBuf>
+    {
+        public override void OnChannelActivated()
+        {
+            FireChannelActivated();
+        }
+
+        protected override void HandleUpstreamMessage(ByteBuf message)
+        {
+            ByteBuf outByteBuf = this.Pipeline.GetBuffer();
+
+            byte[] prefix = System.Text.Encoding.UTF8.GetBytes("Your message: ");
+            for (int i = 0; i < prefix.Length; i++)
+            {
+                outByteBuf.Write(prefix[i]);
+            }
+
+            int inReadable = message.ReadableBytes();
+            for (int i = 0; i < inReadable; i++)
+            {
+                outByteBuf.Write(message.ReadByte());
+            }
+            
+            DownstreamMessageHandled(outByteBuf);
         }
     }
     
@@ -58,6 +94,7 @@ namespace NetCoreWs.Sandbox
                     x.Add(new WebSocketsServerHandshakeHandler());
                     x.Add(new WebSocketsPayloadDataHandler());
                     x.Add(new LogByteBuf());
+                    x.Add(new EchoHandler());
                 }
             );
             

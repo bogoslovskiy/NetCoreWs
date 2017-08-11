@@ -47,7 +47,21 @@ namespace NetCoreWs.WebSockets
 
         protected override void HandleDownstreamMessage(ByteBuf message)
         {
-            throw new System.NotImplementedException();
+            int payloadLen = message.ReadableBytes();
+            
+            ByteBuf outByteBuf = this.Pipeline.GetBuffer();
+
+            Codec.Encode(
+                outByteBuf,
+                message,
+                null /* maskBytes */,
+                WebSocketFrameType.Text,
+                true /* fin */,
+                false /* masked */,
+                payloadLen
+            );
+            
+            DownstreamMessageHandled(outByteBuf);
         }
     }
 }

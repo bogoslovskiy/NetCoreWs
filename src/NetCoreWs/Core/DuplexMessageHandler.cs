@@ -30,11 +30,11 @@ namespace NetCoreWs.Core
             {
                 if (message is TOutputMsg)
                 {
-                    HandleDownstreamMessage((TInputMsg)message);
+                    HandleDownstreamMessage((TOutputMsg)message);
                     return;
                 }
                 
-                throw new InvalidOperationException($"Downstream message must be instance of {typeof(TInputMsg)}");
+                throw new InvalidOperationException($"Downstream message must be instance of {typeof(TOutputMsg)}");
             }
             
             throw new ArgumentNullException(nameof(message));
