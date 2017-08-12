@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using NetCoreUv;
 using NetCoreWs.Buffers;
 using NetCoreWs.Buffers.Unmanaged;
@@ -11,6 +12,7 @@ namespace NetCoreWs.Uv
     {
         internal UvTcpHandle UvTcpHandle;
         private UvWriteRequestT<UnmanagedByteBuf> _writeRequest;
+        private object _writeLock = new object();
         
         // TODO:
         private readonly UnmanagedByteBufProvider _byteBufProvider = new UnmanagedByteBufProvider(4096);
@@ -35,6 +37,8 @@ namespace NetCoreWs.Uv
         private void WriteCallback(UnmanagedByteBuf byteBuf)
         {
             byteBuf.Release();
+            
+            Monitor.Exit(_writeLock);
         }
         
         public override void Send(ByteBuf byteBuf)
@@ -43,10 +47,12 @@ namespace NetCoreWs.Uv
             
             unmanagedByteBuf.GetReadable(out IntPtr ptr, out int len);
 
-            Console.WriteLine(unmanagedByteBuf.Dump(System.Text.Encoding.ASCII));
+            //Console.WriteLine(unmanagedByteBuf.Dump(System.Text.Encoding.ASCII));
 
             var buf = new UvNative.uv_buf_t(ptr, len, PlatformApis.IsWindows);
 
+            Monitor.Enter(_writeLock);
+            
             // TODO: thread safe
             int writeResult = _writeRequest.Write(UvTcpHandle, buf, unmanagedByteBuf);
             

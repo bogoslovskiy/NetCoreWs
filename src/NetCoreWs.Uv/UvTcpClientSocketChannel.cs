@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using NetCoreUv;
 using NetCoreWs.Buffers;
 using NetCoreWs.Buffers.Unmanaged;
@@ -10,7 +11,8 @@ namespace NetCoreWs.Uv
     public class UvTcpClientSocketChannel: ChannelBase<UvTcpClientSocketChannelParameters>
     {
         internal UvTcpHandle UvTcpHandle;
-        private UvWriteRequest _writeRequest;
+        private UvWriteRequestT<UnmanagedByteBuf> _writeRequest;
+        private object _writeLock = new object();
         
         // TODO:
         private readonly UnmanagedByteBufProvider _byteBufProvider = new UnmanagedByteBufProvider(4096);
@@ -18,7 +20,7 @@ namespace NetCoreWs.Uv
         public UvTcpClientSocketChannel()
         {
             UvTcpHandle = new UvTcpHandle();
-            _writeRequest = new UvWriteRequest();
+            _writeRequest = new UvWriteRequestT<UnmanagedByteBuf>();
         }
 
         public override IByteBufProvider GetByteBufProvider()
@@ -29,7 +31,7 @@ namespace NetCoreWs.Uv
         internal void InitUv(UvLoopHandle uvLoop)
         {
             UvTcpHandle.Init(uvLoop);
-            //_writeRequest.Init(WriteCallback);
+            _writeRequest.Init(WriteCallback);
         }
         
         public override void Send(ByteBuf byteBuf)
@@ -38,11 +40,11 @@ namespace NetCoreWs.Uv
             
             unmanagedByteBuf.GetReadable(out IntPtr ptr, out int len);
 
-            Console.WriteLine(unmanagedByteBuf.Dump(System.Text.Encoding.ASCII));
+            //Console.WriteLine(unmanagedByteBuf.Dump(System.Text.Encoding.ASCII));
 
             var buf = new UvNative.uv_buf_t(ptr, len, PlatformApis.IsWindows);
-
-            //int writeResult = _writeRequest.Write(UvTcpHandle, buf);
+            
+            int writeResult = _writeRequest.Write(UvTcpHandle, buf, unmanagedByteBuf);
             
             // TODO: обрабатывать статус с ошибкой.
             //int status = UvTcpHandle.TryWrite(buf);
@@ -53,6 +55,7 @@ namespace NetCoreWs.Uv
         
         public void StartRead()
         {
+            FireActivated();
             UvTcpHandle.ReadStart(AllocCallback, ReadCallback);
         }
 
@@ -61,9 +64,9 @@ namespace NetCoreWs.Uv
             UvTcpHandle.ReadStop();
         }
 
-        private void WriteCallback(IntPtr writeRequestPtr, int status)
+        private void WriteCallback(UnmanagedByteBuf byteBuf)
         {
-            
+            byteBuf.Release();
         }
         
         private void AllocCallback(

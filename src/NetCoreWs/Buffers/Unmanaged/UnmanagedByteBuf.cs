@@ -397,8 +397,8 @@ namespace NetCoreWs.Buffers.Unmanaged
                 _memorySegmentBytePointer = (byte*) (void*) IntPtr.Zero;
             }
             _memorySegmentSize = 0;
-            _readed = 0;
-            _writed = 0;
+            _readed = -1;
+            _writed = -1;
         }
     }
 }

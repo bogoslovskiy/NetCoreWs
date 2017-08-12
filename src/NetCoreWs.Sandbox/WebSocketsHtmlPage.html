@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSockets client</title>
+</head>
+<body>
+<div id="room">
+    <ul class="list-unstyled"></ul>
+    <form>
+        <input type="button" onclick="clickEventHandler()" value="Send"/>
+        <input class="onconnect" autocomplete="off" autofocus placeholder=".">
+        <input class="onmessage" autocomplete="off" autofocus placeholder="">
+        <input class="onerror" autocomplete="off" autofocus placeholder="">
+    </form>
+</div>
+
+<script>
+    var ws = new WebSocket("ws://localhost:5052/");
+
+    ws.onopen = function() 
+    {
+        var elements = document.getElementsByClassName("onconnect");
+        elements[0].value = "Connected";
+    };
+    
+    ws.onmessage = function(event)
+    {
+        var elements = document.getElementsByClassName("onmessage");
+        elements[0].value = event.data;
+    };
+
+    function clickEventHandler()
+    {
+        ws.send("3 1 1 8");
+    }
+</script>
+</body>
+</html>

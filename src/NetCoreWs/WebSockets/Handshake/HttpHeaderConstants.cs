@@ -34,12 +34,6 @@ namespace NetCoreWs.WebSockets.Handshake
             "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Accept: "
         );
         
-        static private byte[] _handshakeRequestBytes = System.Text.Encoding.ASCII.GetBytes(
-            "GET / HTTP/1.1\r\nHost: localhost:5052\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: 7mGOCG9DmlxOo0Tx/uXt9Q==\r\n\r\n"
-        );
-
-        static private byte[] _handshakeResponseBytes = System.Text.Encoding.ASCII.GetBytes(
-            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Accept: ImnT28RIT4b46ZKtNOJG8IBD6a8=\r\n\r\n"
-        );
+        
     }
 }
