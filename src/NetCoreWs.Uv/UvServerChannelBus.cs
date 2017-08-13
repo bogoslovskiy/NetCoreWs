@@ -33,8 +33,9 @@ namespace NetCoreWs.Uv
         {
             UvTcpServerSocketChannel channel = CreateChannel();
             channel.InitUv(_uvLoop);
-
-            streamHandle.Accept(channel.UvTcpHandle);
+            
+            channel.Accept(streamHandle);
+            
             _uvTcpServerSocketChannels.Add(channel);
 
             channel.StartRead();

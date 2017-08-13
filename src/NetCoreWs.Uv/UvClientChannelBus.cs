@@ -17,12 +17,12 @@ namespace NetCoreWs.Uv
 
         public void Open()
         {
-            //uv_tcp_keepalive
             _uvTcpClientSocketChannel = CreateChannel(); 
             _uvTcpClientSocketChannel.InitUv(_uvLoop);
 
-            // TODO: правило деметры
-            _uvTcpClientSocketChannel.UvTcpHandle.Connect(
+            _uvTcpClientSocketChannel.KeepAlive(300 /* delay (seconds) */);
+            
+            _uvTcpClientSocketChannel.Connect(
                 ServerAddress.FromUrl(this.Parameters.Url),
                 ConnectionCallback
             );

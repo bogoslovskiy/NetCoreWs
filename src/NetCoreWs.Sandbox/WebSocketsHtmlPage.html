@@ -10,6 +10,7 @@
     <form>
         <input type="button" onclick="clickEventHandler()" value="Send"/>
         <input class="onconnect" autocomplete="off" autofocus placeholder=".">
+        <input class="message" autocomplete="off" autofocus placeholder="">
         <input class="onmessage" autocomplete="off" autofocus placeholder="">
         <input class="onerror" autocomplete="off" autofocus placeholder="">
     </form>
@@ -32,7 +33,12 @@
 
     function clickEventHandler()
     {
-        ws.send("3 1 1 8");
+//        var elements = document.getElementsByClassName("message");
+//        ws.send(elements[0].value);
+        for (j = 0; j < 10000; j++)
+        {
+            ws.send("Message #" + j);
+        }
     }
 </script>
 </body>

@@ -5,16 +5,16 @@ using System.Runtime.InteropServices;
 
 namespace NetCoreWs.Buffers.Unmanaged
 {
-    public class UnmanagedByteBufProvider : IByteBufProvider
+    public class UnmanagedByteBufProvider1 : IByteBufProvider
     {
         private readonly int _bufDefaultSize;
 
         private readonly ConcurrentQueue<IntPtr> _memorySegments =
             new ConcurrentQueue<IntPtr>();
-        private readonly ConcurrentQueue<UnmanagedByteBuf> _wrappers =
-            new ConcurrentQueue<UnmanagedByteBuf>();
+        private readonly ConcurrentQueue<UnmanagedByteBuf1> _wrappers =
+            new ConcurrentQueue<UnmanagedByteBuf1>();
 
-        public UnmanagedByteBufProvider(int bufDefaultSize)
+        public UnmanagedByteBufProvider1(int bufDefaultSize)
         {
             _bufDefaultSize = bufDefaultSize;
         }
@@ -22,7 +22,7 @@ namespace NetCoreWs.Buffers.Unmanaged
         public ByteBuf GetBuffer()
         {
             IntPtr memPtr = GetMemorySegment();
-            UnmanagedByteBuf byteBuf = GetWrapper();
+            UnmanagedByteBuf1 byteBuf = GetWrapper();
             
             byteBuf.Attach(memPtr, _bufDefaultSize);
             
@@ -34,7 +34,7 @@ namespace NetCoreWs.Buffers.Unmanaged
             return GetMemorySegment();
         }
 
-        public UnmanagedByteBuf WrapMemorySegment(IntPtr memSegPtr, int len)
+        public UnmanagedByteBuf1 WrapMemorySegment(IntPtr memSegPtr, int len)
         {
             var byteBuf = GetWrapper();
             
@@ -48,20 +48,20 @@ namespace NetCoreWs.Buffers.Unmanaged
             _memorySegments.Enqueue(memSegPtr);
         }
 
-        public void ReleaseWrapper(UnmanagedByteBuf wrapper)
+        public void ReleaseWrapper(UnmanagedByteBuf1 wrapper)
         {
             _wrappers.Enqueue(wrapper);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private UnmanagedByteBuf GetWrapper()
+        private UnmanagedByteBuf1 GetWrapper()
         {
-            if (_wrappers.TryDequeue(out UnmanagedByteBuf wrapper))
+            if (_wrappers.TryDequeue(out UnmanagedByteBuf1 wrapper))
             {
                 return wrapper;
             }
             
-            return new UnmanagedByteBuf(this);
+            return new UnmanagedByteBuf1(this);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

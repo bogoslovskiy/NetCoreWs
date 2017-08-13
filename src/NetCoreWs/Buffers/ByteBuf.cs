@@ -2,7 +2,13 @@
 {
     abstract public class ByteBuf
     {
+        abstract public void Append(ByteBuf byteBuf);
+        
+        abstract public bool Released { get; }
+        
         abstract public void Release();
+        
+        abstract public void ReleaseReaded();
 
         abstract public int ReadableBytes();
 

@@ -1,23 +1,133 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Text;
 using NetCoreWs.Utils;
 
 namespace NetCoreWs.Buffers.Unmanaged
 {
+        // TODO: добавить и прописать нормальные типы исключений
     public class UnmanagedByteBuf : ByteBuf
     {
-        private readonly UnmanagedByteBufProvider _provider;
-
-        private IntPtr _memorySegmentPointer;
-        private int _memorySegmentSize;
-        unsafe private byte* _memorySegmentBytePointer;
-
-        private int _readed;
-        private int _writed;
-
-        public UnmanagedByteBuf(UnmanagedByteBufProvider provider)
+        private struct State
         {
-            _provider = provider;
+            public IntPtr MemSegPtr;
+            public int MemSegSize;
+            unsafe public byte* MemSegDataPtr;
+            public int MemSegReadIndex;
+            public int GlobalReaded;
+            public int GlobalWrited;
+
+            unsafe public State(
+                IntPtr memSegPtr,
+                int memSegSize,
+                byte* memSegDataPtr,
+                int memSegReadIndex,
+                int globalReadIndex,
+                int globalWriteIndex)
+            {
+                MemSegPtr = memSegPtr;
+                MemSegSize = memSegSize;
+                MemSegDataPtr = memSegDataPtr;
+                MemSegReadIndex = memSegReadIndex;
+                GlobalReaded = globalReadIndex;
+                GlobalWrited = globalWriteIndex;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public int RemainBytes()
+            {
+                return GlobalWrited - GlobalReaded;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Back(int offset)
+            {
+                MemSegReadIndex -= offset;
+                GlobalReaded -= offset;
+
+                if (MemSegReadIndex < -1)
+                {
+                    SwitchToPrev();
+                }
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            unsafe public byte ReadByte()
+            {
+				if (MemSegReadIndex == MemSegSize - 1)
+				{
+					SwitchToNext();
+				}
+                
+                MemSegReadIndex++;
+                GlobalReaded++;
+
+                return MemSegDataPtr[MemSegReadIndex];
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void SwitchToNext()
+            {
+                IntPtr nextMemSegPtr = MemorySegment.GetNext(MemSegPtr);
+                if (nextMemSegPtr != IntPtr.Zero)
+                {
+                    // Сместиться могли более чем на 1 слот, поэтому вычитаем весь предыдущий сегмент.
+                    MemSegReadIndex -= MemSegSize;
+
+                    SetCurrentMemSeg(nextMemSegPtr);
+                    return;
+                }
+
+                throw new Exception();
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void SwitchToPrev()
+            {
+                IntPtr prevMemSegPtr = MemorySegment.GetPrev(MemSegPtr);
+                if (prevMemSegPtr != IntPtr.Zero)
+                {
+                    SetCurrentMemSeg(prevMemSegPtr);
+
+                    // Сместиться могли более чем на 1 слот, поэтому прибавляем весь текущий сегмент.
+                    MemSegReadIndex += MemSegSize + 1;
+                    return;
+                }
+
+                throw new Exception();
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            unsafe private void SetCurrentMemSeg(IntPtr memSegPtr)
+            {
+                MemSegPtr = memSegPtr;
+                MemSegSize = MemorySegment.GetUsed(MemSegPtr);
+                MemSegDataPtr = (byte*) (void*) MemorySegment.GetDataPtr(MemSegPtr);
+            }
+        }
+
+        // TODO: заменить на интерфейс? 
+        private readonly UnmanagedByteBufAllocator _allocator;
+
+        private IntPtr _memSegPtr;
+        private int _memSegSize;
+        unsafe private byte* _memSegDataPtr;
+
+        private IntPtr _lastMemSegPtr;
+
+        private int _memSegReadIndex;
+        private int _memSegWriteIndex;
+
+        private int _globalReaded;
+        private int _globalWrited;
+
+        private bool _released;
+
+        public override bool Released => _released;
+        
+        public UnmanagedByteBuf(UnmanagedByteBufAllocator allocator)
+        {
+            _allocator = allocator;
         }
 
         ~UnmanagedByteBuf()
@@ -27,26 +137,30 @@ namespace NetCoreWs.Buffers.Unmanaged
             // Таким образом, если текущий объект забыли отдать в пул, не должно быть
             // ссылок на него, чтобы сборщик его почистил, а при финализации объект мог
             // отдать неуправляемый ресурс обратно в пул.
-
+            
             // Если "какой-то" сторонний объект не отдал данный объект в пул удерживает ссылку на него, то
             // мы не можем контролировать такие утечки, они полностью на совести "стороннего" кода.
-
+            
             // Возвращаем куски памяти из неуправляемой кучи в пул.
-            ReleaseMemorySegment();
-
+            ReleaseMemorySegments();
+            
             // Сам объект в пул вернуть не можем, т.к. он уничтожается сборщиком.
         }
 
-        public void Attach(IntPtr memSegPtr, int len)
+        public void Attach(IntPtr memSeg)
         {
-            _memorySegmentPointer = memSegPtr;
+            _memSegPtr = memSeg;
+            _lastMemSegPtr = memSeg;
             unsafe
             {
-                _memorySegmentBytePointer = (byte*) (void*) memSegPtr;
+                _memSegDataPtr = (byte*) (void*) MemorySegment.GetDataPtr(memSeg);
             }
-            _memorySegmentSize = len;
-            _readed = -1;
-            _writed = -1;
+            _memSegSize = MemorySegment.GetUsed(memSeg);
+            _memSegReadIndex = -1;
+            _memSegWriteIndex = -1;
+            _globalReaded = 0;
+            _globalWrited = 0;
+            _released = false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -54,14 +168,34 @@ namespace NetCoreWs.Buffers.Unmanaged
         {
             // Учитывая то, кто использует этот метод, тут никогда не будет других чтений и никогда не будет больше
             // одного сегмента.
-            length = _writed + 1;
-            dataPtr = _memorySegmentPointer;
+            length = _globalWrited;
+            dataPtr = MemorySegment.GetDataPtr(_memSegPtr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetWrite(int write)
         {
-            _writed = write - 1;
+            _globalWrited = write;
+        }
+
+        // TODO: Проверки (например, что присоединяем буфер, который не начали читать).
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override void Append(ByteBuf byteBuf)
+        {
+            UnmanagedByteBuf unmanagedByteBuf = (UnmanagedByteBuf) byteBuf;
+
+            IntPtr appendixCurrentMemSegPtr = unmanagedByteBuf._memSegPtr;
+            IntPtr appendixLastMemSegPtr = unmanagedByteBuf._lastMemSegPtr;
+
+            MemorySegment.SetNext(_lastMemSegPtr, appendixCurrentMemSegPtr);
+            MemorySegment.SetPrev(appendixCurrentMemSegPtr, _lastMemSegPtr);
+
+            _lastMemSegPtr = appendixLastMemSegPtr;
+            _globalWrited += unmanagedByteBuf._globalWrited;
+            
+            // Т.к. мы все забрали у присоединяемого буфера, то буфер как обертка больше не нужен.
+            // Освобождаем его.
+            unmanagedByteBuf.ReleaseCore();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -71,29 +205,64 @@ namespace NetCoreWs.Buffers.Unmanaged
             // сам объект. Пул должен принимать только те куски на возврат, что ему отдают.
             
             // Возвращаем куски памяти из неуправляемой кучи в пул.
-            ReleaseMemorySegment();
+            ReleaseMemorySegments();
 
             ReleaseCore();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override void ReleaseReaded()
+        {
+            // Вычисляем, начиная с какого сегмента можно освободить прочитанную цепочку сегментов.
+            // Тут возможны 2 варианта:
+            // - Весь буфер уже прочитан, тогда можно освободить все.
+            // - Буфер прочитан не полностью, тогда можно освободить все предыдущие, а текущий оставить.
+            
+            // Сценарий с освобождением всей цепочки требует более тщательной реализации и пока невозможен,
+            // поэтому всегда будем освобождать только начиная с предыдущего.
+            // Дело в том, что у буфера пока не может не быть какого-то сегмента, а при освобождении всех именно так
+            // и получится, но сам буфер может использоваться для аккумуляции дальше. Будет реализовано потом, если
+            // потребуется.
+
+            IntPtr memSegPtr = MemorySegment.GetPrev(_memSegPtr);
+            
+            // Отвязываем от текущего.
+            MemorySegment.SetPrev(_memSegPtr, IntPtr.Zero);
+            
+            ReleaseMemorySegmentsAt(memSegPtr);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadableBytes()
         {
-            return _writed - _readed;
+            return _globalWrited - _globalReaded;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void Back(int offset)
         {
-            _readed -= offset;
+            _memSegReadIndex -= offset;
+            _globalReaded -= offset;
+
+            if (_memSegReadIndex < -1)
+            {
+                // TODO: могли откатиться на несколько сегментов назад
+                SwitchToPrev();
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public override byte ReadByte()
         {
-            _readed++;
+			if (_memSegReadIndex == _memSegSize - 1)
+			{
+				SwitchToNext();
+			}
+            
+            _memSegReadIndex++;
+            _globalReaded++;
 
-            return _memorySegmentBytePointer[_readed];
+            return _memSegDataPtr[_memSegReadIndex];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -171,13 +340,13 @@ namespace NetCoreWs.Buffers.Unmanaged
         {
             bool stopByteMatched = false;
 
-            int allReaded = 0;
             int readed = 0;
 
-            while (ReadableBytes() > 0)
+            State state = GetState();
+
+            while (state.RemainBytes() > 0)
             {
-                byte currentByte = ReadByte();
-                allReaded++;
+                byte currentByte = state.ReadByte();
 
                 if (currentByte == stopByte)
                 {
@@ -197,11 +366,10 @@ namespace NetCoreWs.Buffers.Unmanaged
 
             if (stopByteMatched)
             {
-                Back(1);
+                state.Back(1);
+                SetState(state);
                 return readed;
             }
-
-            Back(allReaded);
 
             return -1;
         }
@@ -212,13 +380,13 @@ namespace NetCoreWs.Buffers.Unmanaged
             bool stopByte1Matched = false;
             bool stopBytesMatched = false;
 
-            int allReaded = 0;
             int readed = 0;
 
-            while (ReadableBytes() > 0)
+            State state = GetState();
+
+            while (state.RemainBytes() > 0)
             {
-                byte currentByte = ReadByte();
-                allReaded++;
+                byte currentByte = state.ReadByte();
 
                 if (currentByte == stopByte2)
                 {
@@ -248,27 +416,26 @@ namespace NetCoreWs.Buffers.Unmanaged
 
             if (stopBytesMatched)
             {
-                Back(2);
-
+                state.Back(2);
+                SetState(state);
                 return readed;
             }
-
-            Back(allReaded);
 
             return -1;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int SkipTo(byte stopByte, bool include)
         {
             int skipped = 0;
 
             bool stopByteMatched = false;
 
-            while (ReadableBytes() > 0)
+            State state = GetState();
+
+            while (state.RemainBytes() > 0)
             {
                 skipped++;
-                byte currentByte = ReadByte();
+                byte currentByte = state.ReadByte();
 
                 if (currentByte == stopByte)
                 {
@@ -282,18 +449,16 @@ namespace NetCoreWs.Buffers.Unmanaged
                 if (!include)
                 {
                     skipped -= 1;
-                    Back(1);
+                    state.Back(1);
                 }
 
+                SetState(state);
                 return skipped;
             }
-
-            Back(skipped);
 
             return -1;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int SkipTo(byte stopByte1, byte stopByte2, bool include)
         {
             int skipped = 0;
@@ -301,10 +466,12 @@ namespace NetCoreWs.Buffers.Unmanaged
             bool stopByte1Matched = false;
             bool stopBytesMatched = false;
 
-            while (ReadableBytes() > 0)
+            State state = GetState();
+
+            while (state.RemainBytes() > 0)
             {
                 skipped++;
-                byte currentByte = ReadByte();
+                byte currentByte = state.ReadByte();
 
                 if (currentByte == stopByte2)
                 {
@@ -328,77 +495,157 @@ namespace NetCoreWs.Buffers.Unmanaged
                 if (!include)
                 {
                     skipped -= 2;
-                    Back(2);
+                    state.Back(2);
                 }
 
+                SetState(state);
                 return skipped;
             }
-
-            Back(skipped);
 
             return -1;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int WritableBytes()
         {
-            return _memorySegmentSize - _writed - 1;
+            // TODO: Запись пока что невозможна в цепочку сегментов.
+            return _memSegSize - _memSegWriteIndex - 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public override void Write(byte @byte)
         {
-            _writed++;
+			// TODO: Запись пока что невозможна в цепочку сегментов.
+			if (_memSegWriteIndex == _memSegSize - 1)
+			{
+				throw new InvalidOperationException();
+			}
+            
+            _memSegWriteIndex++;
+            _globalWrited++;
 
-            _memorySegmentBytePointer[_writed] = @byte;
+            _memSegDataPtr[_memSegWriteIndex] = @byte;
         }
 
-        unsafe public override string Dump(System.Text.Encoding encoding)
+        public override string Dump(Encoding encoding)
         {
-            int readable = ReadableBytes();
+            throw new NotImplementedException();
+        }
 
-            int index = _readed;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        unsafe private State GetState()
+        {
+            return new State(
+                _memSegPtr,
+                _memSegSize,
+                _memSegDataPtr,
+                _memSegReadIndex,
+                _globalReaded,
+                _globalWrited
+            );
+        }
 
-            byte[] bytes = new byte[readable];
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        unsafe private void SetState(State state)
+        {
+            _memSegPtr = state.MemSegPtr;
+            _memSegSize = state.MemSegSize;
+            _memSegDataPtr = state.MemSegDataPtr;
+            _memSegReadIndex = state.MemSegReadIndex;
+            _globalReaded = state.GlobalReaded;
+            _globalWrited = state.GlobalWrited;
+        }
 
-            int i = 0;
-            while (i < readable)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SwitchToNext()
+        {
+            IntPtr nextMemSegPtr = MemorySegment.GetNext(_memSegPtr);
+            if (nextMemSegPtr != IntPtr.Zero)
             {
-                index++;
-                bytes[i] = _memorySegmentBytePointer[index];
-                i++;
+                // Сместиться могли более чем на 1 слот, поэтому вычитаем весь предыдущий сегмент.
+                _memSegReadIndex -= _memSegSize;
+
+                SetCurrentMemSeg(nextMemSegPtr);
+                return;
             }
 
-            return encoding.GetString(bytes);
+            throw new Exception();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SwitchToPrev()
+        {
+            IntPtr prevMemSegPtr = MemorySegment.GetPrev(_memSegPtr);
+            if (prevMemSegPtr != IntPtr.Zero)
+            {
+                SetCurrentMemSeg(prevMemSegPtr);
+
+                // Сместиться могли более чем на 1 слот, поэтому прибавляем весь текущий сегмент.
+                _memSegReadIndex += _memSegSize + 1;
+                return;
+            }
+
+            throw new Exception();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        unsafe private void SetCurrentMemSeg(IntPtr memSegPtr)
+        {
+            _memSegPtr = memSegPtr;
+            _memSegSize = MemorySegment.GetUsed(_memSegPtr);
+            _memSegDataPtr = (byte*) (void*) MemorySegment.GetDataPtr(_memSegPtr);
+        }
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ReleaseCore()
         {
             // Инициализируем поля пустыми значениями.
             Clear();
-
+            
             // Теперь возвращем в пул сам объект.
-            _provider.ReleaseWrapper(this);
+            _allocator.Release(this);
         }
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ReleaseMemorySegment()
+        private void ReleaseMemorySegments()
         {
-            _provider.ReleaseMemSeg(_memorySegmentPointer);
+            // Для освобождения всей цепочки сегментов памяти указываем стартовый сегмент - последний.
+            ReleaseMemorySegmentsAt(_lastMemSegPtr);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ReleaseMemorySegmentsAt(IntPtr memSegPtr)
+        {
+            // Проходим от указанного сегмента по связям с предыдущими.
+            while (memSegPtr != IntPtr.Zero)
+            {
+                IntPtr releaseMemSegPtr = memSegPtr;
+                memSegPtr = MemorySegment.GetPrev(releaseMemSegPtr);
+                
+                // Чистим связи с другими сегментами.
+                MemorySegment.SetPrev(releaseMemSegPtr, IntPtr.Zero);
+                MemorySegment.SetNext(releaseMemSegPtr, IntPtr.Zero);
+                
+                _allocator.Release(releaseMemSegPtr);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Clear()
         {
-            _memorySegmentPointer = IntPtr.Zero;
+            _memSegPtr = IntPtr.Zero;
+            _lastMemSegPtr = IntPtr.Zero;
             unsafe
             {
-                _memorySegmentBytePointer = (byte*) (void*) IntPtr.Zero;
+                _memSegDataPtr = (byte*) (void*) IntPtr.Zero;;
             }
-            _memorySegmentSize = 0;
-            _readed = -1;
-            _writed = -1;
+            _memSegSize = 0;
+            _memSegReadIndex = -1;
+            _memSegWriteIndex = -1;
+            _globalReaded = 0;
+            _globalWrited = 0;
+            
+            // Обязательно устанавливаем флаг, указывающий на то, что буфер больше нельзя использовать.
+            _released = true;
         }
     }
 }

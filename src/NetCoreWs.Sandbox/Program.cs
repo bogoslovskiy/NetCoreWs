@@ -81,6 +81,48 @@ namespace NetCoreWs.Sandbox
             DownstreamMessageHandled(outByteBuf);
         }
     }
+    
+    public class MeasureHandler : SimplexUpstreamMessageHandler<ByteBuf>
+    {
+        private volatile int _count;
+        private int _oldCount;
+        private Timer _timer;
+        
+        public override void OnChannelActivated()
+        {
+            FireChannelActivated();
+            
+            _timer = new Timer(TimerCb, null, new TimeSpan(0, 0, 0, 0), new TimeSpan(0, 0, 0, 1));
+        }
+
+        protected override void HandleUpstreamMessage(ByteBuf message)
+        {
+            _count++;
+            
+//            ByteBuf outByteBuf = this.Pipeline.GetBuffer();
+//
+//            byte[] prefix = System.Text.Encoding.UTF8.GetBytes("Your message: ");
+//            for (int i = 0; i < prefix.Length; i++)
+//            {
+//                outByteBuf.Write(prefix[i]);
+//            }
+//
+//            int inReadable = message.ReadableBytes();
+//            for (int i = 0; i < inReadable; i++)
+//            {
+//                outByteBuf.Write(message.ReadByte());
+//            }
+//            
+//            DownstreamMessageHandled(outByteBuf);
+        }
+
+        private void TimerCb(object state)
+        {
+            Console.WriteLine($"{_count-_oldCount} / {_count}");
+
+            _oldCount = _count;
+        }
+    }
 
     public class SendMessageHandler : SimplexUpstreamMessageHandler<ByteBuf>
     {
@@ -90,8 +132,7 @@ namespace NetCoreWs.Sandbox
         {
             FireChannelActivated();
 
-            _timer = new Timer(TimerCb, null, new TimeSpan(0, 0, 0, 3), new TimeSpan(1, 0, 0, 3));
-            
+            _timer = new Timer(TimerCb, null, new TimeSpan(0, 0, 0, 0), new TimeSpan(1, 0, 0, 3));
         }
 
         protected override void HandleUpstreamMessage(ByteBuf message)
@@ -101,11 +142,11 @@ namespace NetCoreWs.Sandbox
         private void TimerCb(object state)
         {
             var sw = Stopwatch.StartNew();
-            int count = 1000;
+            int count = 10000;
             for (int i = 0; i < count; i++)
             {
+                //Task writeTask = Task.Factory.StartNew(S);
                 S();
-                Thread.Sleep(1);
             }
             sw.Stop();
             
@@ -132,8 +173,9 @@ namespace NetCoreWs.Sandbox
         static void Main(string[] args)
         {
             Task serverTask = Task.Factory.StartNew(StartServer);
-            Thread.Sleep(2000);
-            Task clientTask = Task.Factory.StartNew(StartClient);
+            //Thread.Sleep(1000);
+            //Task clientTask1 = Task.Factory.StartNew(StartClient);
+            //Task clientTask2 = Task.Factory.StartNew(StartClient);
             
             Console.ReadLine();
         }
@@ -153,9 +195,11 @@ namespace NetCoreWs.Sandbox
                 x =>
                 {
                     x.Add(new WebSocketsServerHandshakeHandler());
-                    x.Add(new WebSocketsPayloadDataHandler());
+                    x.Add(new WebSocketsPayloadDataDecoder());
+                    x.Add(new WebSocketsPayloadDataEncoder());
                     x.Add(new LogByteBuf("Server"));
                     x.Add(new EchoHandler());
+                    //x.Add(new MeasureHandler());
                 }
             );
             
@@ -176,8 +220,9 @@ namespace NetCoreWs.Sandbox
                 x =>
                 {
                     x.Add(new WebSocketsClientHandshakeHandler());
-                    x.Add(new WebSocketsPayloadDataHandler());
-                    x.Add(new LogByteBuf("Client"));
+                    x.Add(new WebSocketsPayloadDataDecoder());
+                    x.Add(new WebSocketsPayloadDataEncoder());
+                    //x.Add(new LogByteBuf("Client"));
                     x.Add(new SendMessageHandler());
                 }
             );
