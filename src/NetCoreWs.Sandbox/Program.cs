@@ -16,6 +16,11 @@ using ClientBootsrtapper = NetCoreWs.Core.Bootstrapper<
     NetCoreWs.Uv.UvClientChannelBusParameters,
     NetCoreWs.Uv.UvTcpClientSocketChannel,
     NetCoreWs.Uv.UvTcpClientSocketChannelParameters>;
+using ClientBootsrtapper2 = NetCoreWs.Core.Bootstrapper<
+    NetCoreWs.Sockets.ClientSocketChannelBus,
+    NetCoreWs.Sockets.ClientSocketChannelBusParameters,
+    NetCoreWs.Sockets.TcpClientSocketChannel,
+    NetCoreWs.Sockets.TcpClientSocketChannelParameters>;
 
 namespace NetCoreWs.Sandbox
 {
@@ -82,7 +87,7 @@ namespace NetCoreWs.Sandbox
         }
     }
     
-    public class MeasureHandler : SimplexUpstreamMessageHandler<ByteBuf>
+    public class MeasureHandler : DuplexMessageHandler<ByteBuf, ByteBuf>
     {
         private volatile int _count;
         private int _oldCount;
@@ -98,7 +103,9 @@ namespace NetCoreWs.Sandbox
         protected override void HandleUpstreamMessage(ByteBuf message)
         {
             _count++;
-            
+
+//            Console.WriteLine(message.Dump(System.Text.Encoding.UTF8));
+
 //            ByteBuf outByteBuf = this.Pipeline.GetBuffer();
 //
 //            byte[] prefix = System.Text.Encoding.UTF8.GetBytes("Your message: ");
@@ -113,7 +120,12 @@ namespace NetCoreWs.Sandbox
 //                outByteBuf.Write(message.ReadByte());
 //            }
 //            
-//            DownstreamMessageHandled(outByteBuf);
+            //DownstreamMessageHandled(message);
+        }
+
+        protected override void HandleDownstreamMessage(ByteBuf message)
+        {
+            DownstreamMessageHandled(message);
         }
 
         private void TimerCb(object state)
@@ -142,7 +154,7 @@ namespace NetCoreWs.Sandbox
         private void TimerCb(object state)
         {
             var sw = Stopwatch.StartNew();
-            int count = 10000;
+            int count = 10;
             for (int i = 0; i < count; i++)
             {
                 //Task writeTask = Task.Factory.StartNew(S);
@@ -175,7 +187,7 @@ namespace NetCoreWs.Sandbox
             Task serverTask = Task.Factory.StartNew(StartServer);
             //Thread.Sleep(1000);
             //Task clientTask1 = Task.Factory.StartNew(StartClient);
-            //Task clientTask2 = Task.Factory.StartNew(StartClient);
+            //Task clientTask2 = Task.Factory.StartNew(StartClient2);
             
             Console.ReadLine();
         }
@@ -197,9 +209,10 @@ namespace NetCoreWs.Sandbox
                     x.Add(new WebSocketsServerHandshakeHandler());
                     x.Add(new WebSocketsPayloadDataDecoder());
                     x.Add(new WebSocketsPayloadDataEncoder());
-                    x.Add(new LogByteBuf("Server"));
-                    x.Add(new EchoHandler());
-                    //x.Add(new MeasureHandler());
+                    //x.Add(new LogByteBuf("Server"));
+                    //x.Add(new EchoHandler());
+                    x.Add(new MeasureHandler());
+                    //x.Add(new EchoHandler());
                 }
             );
             
@@ -223,6 +236,31 @@ namespace NetCoreWs.Sandbox
                     x.Add(new WebSocketsPayloadDataDecoder());
                     x.Add(new WebSocketsPayloadDataEncoder());
                     //x.Add(new LogByteBuf("Client"));
+                    x.Add(new SendMessageHandler());
+                }
+            );
+            
+            clientBootstrapper.Bootstrapp().Open();
+        }
+        
+        static void StartClient2()
+        {
+            var clientBootstrapper = new ClientBootsrtapper2();
+            clientBootstrapper.InitChannel(
+                x =>
+                {
+                    x.Host = "http://127.0.0.1/";
+                    x.Port = 5052;
+                },
+                x => { }
+            );
+            clientBootstrapper.InitPipeline(
+                x =>
+                {
+                    x.Add(new WebSocketsClientHandshakeHandler());
+                    x.Add(new WebSocketsPayloadDataDecoder());
+                    x.Add(new WebSocketsPayloadDataEncoder());
+                    x.Add(new LogByteBuf("Client"));
                     x.Add(new SendMessageHandler());
                 }
             );

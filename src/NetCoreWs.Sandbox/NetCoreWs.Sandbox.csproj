@@ -5,6 +5,7 @@
     <RuntimeFrameworkVersion>1.0.5</RuntimeFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\NetCoreWs.Sockets\NetCoreWs.Sockets.csproj" />
     <ProjectReference Include="..\NetCoreWs.Uv\NetCoreWs.Uv.csproj" />
     <ProjectReference Include="..\NetCoreWs\NetCoreWs.csproj" />
   </ItemGroup>

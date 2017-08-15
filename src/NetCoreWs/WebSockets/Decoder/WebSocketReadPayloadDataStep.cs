@@ -17,20 +17,24 @@ namespace NetCoreWs.WebSockets.Decoder
             frameInfo = null;
             nextStep = null;
 
-            if (byteBuf.ReadableBytes() < state.PayloadLen)
+            int factPayloadLen = state.ExtendedPayloadLen > 0
+                ? (int) state.ExtendedPayloadLen
+                : state.PayloadLen;
+            
+            if (byteBuf.ReadableBytes() < factPayloadLen)
             {
                 return;
             }
             
             byte[] mask = new byte[4];
             state.MaskingKey.CopyTo(mask, 0);
-            
+
             frameInfo = new WebSocketFrameInfo(
                 Utils.GetFrameType(state.OpCode),
                 state.Fin,
                 state.Mask,
                 mask,
-                state.PayloadLen
+                factPayloadLen
             );
         }
     }

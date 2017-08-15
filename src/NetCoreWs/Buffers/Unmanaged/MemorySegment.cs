@@ -83,6 +83,14 @@ namespace NetCoreWs.Buffers.Unmanaged
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static public void ClearBeforeRelease(IntPtr memorySegmentPtr)
+        {
+            SetPrev(memorySegmentPtr, IntPtr.Zero);
+            SetNext(memorySegmentPtr, IntPtr.Zero);
+            SetUsed(memorySegmentPtr, 0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public IntPtr GetLast(IntPtr memorySegmentPtr)
         {
             IntPtr currentMemSeg;

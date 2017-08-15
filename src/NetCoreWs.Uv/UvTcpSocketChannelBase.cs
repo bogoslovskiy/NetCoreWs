@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using System.Threading;
 using NetCoreUv;
 using NetCoreWs.Buffers;
-using NetCoreWs.Buffers.Unmanaged;
+using NetCoreWs.Buffers.Experimental;
 using NetCoreWs.Channels;
 
 namespace NetCoreWs.Uv
@@ -12,16 +11,15 @@ namespace NetCoreWs.Uv
         where TChannelParameters : class, new()
     {
         protected readonly UvTcpHandle UvTcpHandle;
-        private readonly UvWriteRequestT<UnmanagedByteBuf> _writeRequest;
-        private long _writeLock;
+//        private readonly UvWriteRequestT<UnmanagedByteBuf> _writeRequest;
         
         // TODO:
-        private readonly UnmanagedByteBufAllocator _byteBufProvider = new UnmanagedByteBufAllocator(4096);
+        private readonly LockFreeUnmanagedByteBufProvider _byteBufProvider = new LockFreeUnmanagedByteBufProvider(4096);
 
         protected UvTcpSocketChannelBase()
         {
             UvTcpHandle = new UvTcpHandle();
-            _writeRequest = new UvWriteRequestT<UnmanagedByteBuf>();
+//            _writeRequest = new UvWriteRequestT<UnmanagedByteBuf>();
         }
 
         public override IByteBufProvider GetByteBufProvider()
@@ -31,25 +29,18 @@ namespace NetCoreWs.Uv
         
         public override void Send(ByteBuf byteBuf)
         {
-            var unmanagedByteBuf = (UnmanagedByteBuf) byteBuf;
+            var unmanagedByteBuf = (IUnmanagedByteBuf) byteBuf;
             
             unmanagedByteBuf.GetReadable(out IntPtr ptr, out int len);
 
-            //Console.WriteLine(unmanagedByteBuf.Dump(System.Text.Encoding.ASCII));
-
             var buf = new UvNative.uv_buf_t(ptr, len, PlatformApis.IsWindows);
 
-            if (Interlocked.CompareExchange(ref _writeLock, 1, 0) != 0)
-            {
-                var spinWait = new SpinWait();
-                while (Interlocked.CompareExchange(ref _writeLock, 1, 0) != 0)
-                {
-                    spinWait.SpinOnce();
-                }
-            }
+            UvTcpHandle.TryWrite(buf);
             
-            // TODO: обрабатывать статус с ошибкой.
-            int writeResult = _writeRequest.Write(UvTcpHandle, buf, unmanagedByteBuf);
+//            // TODO: обрабатывать статус с ошибкой.
+//            UvWriteRequestT<ByteBuf> writeRequest = new UvWriteRequestT<ByteBuf>();
+//            writeRequest.Init(WriteCallback);
+//            int writeResult = writeRequest.Write(UvTcpHandle, buf, byteBuf);
         }
         
         public void StartRead()
@@ -66,17 +57,15 @@ namespace NetCoreWs.Uv
         internal void InitUv(UvLoopHandle uvLoop)
         {
             UvTcpHandle.Init(uvLoop);
-            _writeRequest.Init(WriteCallback);
+//            _writeRequest.Init(WriteCallback);
         }
         
-        private void WriteCallback(UnmanagedByteBuf byteBuf)
-        {
-            // TODO: обрабатывать статус с ошибкой.
-            
-            byteBuf.Release();
-
-            Interlocked.Exchange(ref _writeLock, 0);
-        }
+//        private void WriteCallback(UnmanagedByteBuf byteBuf)
+//        {
+//            // TODO: обрабатывать статус с ошибкой.
+//            
+//            byteBuf.Release();
+//        }
 
         private void AllocCallback(
             UvStreamHandle streamHandle,
@@ -87,7 +76,7 @@ namespace NetCoreWs.Uv
             // в ReadCallback, где будет завернут в буфер.
             
             // TODO:
-            var byteBuf = (UnmanagedByteBuf)_byteBufProvider.GetBuffer();
+            var byteBuf = (MemorySegmentByteBuffer)_byteBufProvider.GetBuffer();
             int writable = byteBuf.WritableBytes();
             IntPtr memPtr;
             int readable;
@@ -99,7 +88,7 @@ namespace NetCoreWs.Uv
         {
             if (status > 0)
             {
-                UnmanagedByteBuf byteBuf = _byteBufProvider.WrapMemorySegment(buf.Memory, buf.Len);
+                MemorySegmentByteBuffer byteBuf = _byteBufProvider.WrapMemorySegment(buf.Memory, buf.Len);
                 byteBuf.SetWrite(status);
 
                 try

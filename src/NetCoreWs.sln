@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetCoreWs.Sandbox", "NetCor
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetCoreUv", "..\..\NetCoreUv\src\NetCoreUv\NetCoreUv.csproj", "{BA022D5F-DEE9-4A58-AC64-C37AE3FC87ED}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetCoreWs.Sockets", "NetCoreWs.Sockets\NetCoreWs.Sockets.csproj", "{4E6EABAA-50F4-47F7-90CD-733FF1AF28CB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{BA022D5F-DEE9-4A58-AC64-C37AE3FC87ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BA022D5F-DEE9-4A58-AC64-C37AE3FC87ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BA022D5F-DEE9-4A58-AC64-C37AE3FC87ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E6EABAA-50F4-47F7-90CD-733FF1AF28CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E6EABAA-50F4-47F7-90CD-733FF1AF28CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E6EABAA-50F4-47F7-90CD-733FF1AF28CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E6EABAA-50F4-47F7-90CD-733FF1AF28CB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

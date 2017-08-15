@@ -1,4 +1,5 @@
-﻿using NetCoreWs.Buffers;
+﻿using System;
+using NetCoreWs.Buffers;
 using NetCoreWs.Codecs;
 using NetCoreWs.WebSockets.Decoder;
 
@@ -46,11 +47,14 @@ namespace NetCoreWs.WebSockets
                         outputByteBuf.Write(byteBuf.ReadByte());
                     }
                 }
+                
+                //Console.WriteLine(outputByteBuf.Dump(System.Text.Encoding.UTF8));
             }
             
             // Как минимум мы можем освободить прочитанную часть.
             // Буфер при этом не освободится полностью.
-            byteBuf.ReleaseReaded();
+            // TODO: NRE
+            //byteBuf.ReleaseReaded();
             
             return outputByteBuf;
         }

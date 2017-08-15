@@ -39,6 +39,7 @@ namespace NetCoreWs.WebSockets
         {
             switch (opCode)
             {
+                case 0x0: return WebSocketFrameType.Continuation;
                 case 0x1: return WebSocketFrameType.Text;
                 case 0x2: return WebSocketFrameType.Binary;
                 case 0x8: return WebSocketFrameType.Close;
