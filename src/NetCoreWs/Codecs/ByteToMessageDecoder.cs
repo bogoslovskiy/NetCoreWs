@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using NetCoreWs.Buffers;
 using NetCoreWs.Core;
 
@@ -7,6 +8,11 @@ namespace NetCoreWs.Codecs
     abstract public class ByteToMessageDecoder<TMessage> : DuplexMessageHandler<ByteBuf, TMessage>
     {
         private ByteBuf _cumulatedByteBuf;
+        
+        [ThreadStatic]
+        static private List<TMessage> _output;
+        
+        private const int OutputBatchSize = 200;
         
         abstract protected TMessage DecodeOne(ByteBuf byteBuf);
         
@@ -24,8 +30,9 @@ namespace NetCoreWs.Codecs
                 inputMessage = _cumulatedByteBuf;
                 _cumulatedByteBuf = null;
             }
-            
-            List<TMessage> output = new List<TMessage>();
+
+            _output = _output ?? new List<TMessage>(OutputBatchSize);
+            _output.Clear();
             
             // Пока декодер возвращает объект и в буфере есть данные для чтения, есть возможность декодировать следующий
             // объект.
@@ -37,14 +44,22 @@ namespace NetCoreWs.Codecs
                 outputMessage = DecodeOne(inputMessage);
                 if (outputMessage != null)
                 {
-                    output.Add(outputMessage);
-                    // TODO: оптимальнее заполнять список и потом каждый элемент отдельно отправить дальше.
-                    //UpstreamMessageHandled(outputMessage);
+                    if (_output.Count == OutputBatchSize - 1)
+                    {
+                        foreach (TMessage message in _output)
+                        {
+                            UpstreamMessageHandled(message);
+                        }
+                        
+                        _output.Clear();
+                    }
+                    
+                    _output.Add(outputMessage);
                 }
             }
             while (outputMessage != null && inputMessage.ReadableBytes() > 0);
             
-            foreach (TMessage message in output)
+            foreach (TMessage message in _output)
             {
                 UpstreamMessageHandled(message);
             }
@@ -54,6 +69,11 @@ namespace NetCoreWs.Codecs
             if (!inputMessage.Released && inputMessage.ReadableBytes() > 0)
             {
                 _cumulatedByteBuf = inputMessage;
+            }
+            
+            if (!inputMessage.Released && inputMessage.ReadableBytes() == 0)
+            {
+                inputMessage.Release();
             }
         }
 

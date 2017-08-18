@@ -13,7 +13,7 @@ namespace NetCoreWs.Buffers.Unmanaged
         // | Next     | Prev     | Size | Used | Data ........... |
         // +----------+----------+------+------+------------------+
 
-        public const int HeaderSize = 24;
+        static public int HeaderSize = IntPtr.Size * 2 + 8;
 
         static private readonly int OffsetPrev = IntPtr.Size;
         static private readonly int OffsetSize = 2 * IntPtr.Size;
@@ -85,8 +85,6 @@ namespace NetCoreWs.Buffers.Unmanaged
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public void ClearBeforeRelease(IntPtr memorySegmentPtr)
         {
-            SetPrev(memorySegmentPtr, IntPtr.Zero);
-            SetNext(memorySegmentPtr, IntPtr.Zero);
             SetUsed(memorySegmentPtr, 0);
         }
 

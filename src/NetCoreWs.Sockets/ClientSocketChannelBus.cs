@@ -11,11 +11,10 @@ namespace NetCoreWs.Sockets
         public void Open()
         {
             _channel = CreateChannel();
+            _channel.Connect(this.Parameters.IpAddress, this.Parameters.Port);
             
-            _channel.Connect(this.Parameters.Host, this.Parameters.Port);
-
-            Task startReadTask = _channel.StartRead();
-            Task.WaitAll(startReadTask);
+            Task readingTask = _channel.StartRead();
+            Task.WaitAll(readingTask);
         }
     }
 }

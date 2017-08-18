@@ -11,23 +11,31 @@ namespace NetCoreWs.Sockets
     {
         protected Socket Socket;
         private SimpleByteBufProvider _byteBufProvider;
+        private Task _readingTask;
 
         public TcpSocketChannelBase()
         {
-            _byteBufProvider = new SimpleByteBufProvider();
-            Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _byteBufProvider = new SimpleByteBufProvider(4096);
         }
 
-        public async Task StartRead()
+        public Task StartRead()
         {
-            byte[] buffer = new byte[4096];
-            
+            FireActivated();
+            _readingTask = Task.Factory.StartNew(StartReading);
+            return _readingTask;
+        }
+        
+        private async void StartReading()
+        {
             while (true)
             {
+                byte[] buffer = _byteBufProvider.GetDefaultDataCore();
+                
                 int received = await Socket.ReceiveAsync(new ArraySegment<byte>(buffer), SocketFlags.None);
                 if (received > 0)
                 {
-                    FireReceive(new SimpleByteBuf(buffer));
+                    var byteBuf = _byteBufProvider.Wrap(buffer, received);
+                    FireReceive(byteBuf);
                 }
             }
         }
@@ -41,9 +49,9 @@ namespace NetCoreWs.Sockets
         {
             SimpleByteBuf simpleByteBuf = (SimpleByteBuf) byteBuf;
 
-            byte[] buffer = simpleByteBuf.GetInternalBuffer(out int offset, out int size);
-
-            Socket.Send(buffer, offset, size, SocketFlags.None);
+            simpleByteBuf.GetReadable(out byte[] data, out int len);
+            
+            Socket.Send(data, 0, len, SocketFlags.None);
         }
     }
 }

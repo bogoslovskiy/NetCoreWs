@@ -14,7 +14,8 @@ namespace NetCoreWs.Uv
 //        private readonly UvWriteRequestT<UnmanagedByteBuf> _writeRequest;
         
         // TODO:
-        private readonly LockFreeUnmanagedByteBufProvider _byteBufProvider = new LockFreeUnmanagedByteBufProvider(4096);
+        private readonly LockFreeUnmanagedByteBufProvider _byteBufProvider = 
+            new LockFreeUnmanagedByteBufProvider(65536, 4096, 1000);
 
         protected UvTcpSocketChannelBase()
         {
@@ -74,31 +75,37 @@ namespace NetCoreWs.Uv
         {
             // Тут мы можем просто взять поинтер, без буфера. Все равно поинтер не потеряется и будет передан
             // в ReadCallback, где будет завернут в буфер.
-            
-            // TODO:
-            var byteBuf = (MemorySegmentByteBuffer)_byteBufProvider.GetBuffer();
-            int writable = byteBuf.WritableBytes();
-            IntPtr memPtr;
-            int readable;
-            byteBuf.GetReadable(out memPtr, out readable);
-            buf = new UvNative.uv_buf_t(memPtr, writable, PlatformApis.IsWindows);
+            try
+            {
+                IntPtr dataPtr = _byteBufProvider.GetDefaultDataIntPtr(out int size);
+                buf = new UvNative.uv_buf_t(dataPtr, size, PlatformApis.IsWindows);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                streamHandle.ReadStop();
+                streamHandle.Close();
+                
+                buf = new UvNative.uv_buf_t();
+            }
         }
         
         private void ReadCallback(UvStreamHandle streamHandle, int status, ref UvNative.uv_buf_t buf)
         {
             if (status > 0)
             {
-                MemorySegmentByteBuffer byteBuf = _byteBufProvider.WrapMemorySegment(buf.Memory, buf.Len);
-                byteBuf.SetWrite(status);
-
                 try
                 {
+                    MemorySegmentByteBuffer byteBuf = _byteBufProvider.WrapMemorySegment(buf.Memory, buf.Len);
+                    byteBuf.SetWrite(status);
+
                     this.Receive(byteBuf);
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e);
-                    throw;
+                    streamHandle.ReadStop();
+                    streamHandle.Close();
                 }
             }
             else if (status == 0)

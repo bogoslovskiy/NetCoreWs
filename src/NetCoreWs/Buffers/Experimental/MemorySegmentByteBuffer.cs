@@ -28,6 +28,24 @@ namespace NetCoreWs.Buffers.Experimental
             _byteBufProvider = byteBufProvider;
         }
         
+        // TODO:
+        ~MemorySegmentByteBuffer()
+        {
+            // Пул объектов такого типа должен быть устроен таким образом,
+            // чтобы не хранить ссылку на отданный объект.
+            // Таким образом, если текущий объект забыли отдать в пул, не должно быть
+            // ссылок на него, чтобы сборщик его почистил, а при финализации объект мог
+            // отдать неуправляемый ресурс обратно в пул.
+            
+            // Если "какой-то" сторонний объект не отдал данный объект в пул удерживает ссылку на него, то
+            // мы не можем контролировать такие утечки, они полностью на совести "стороннего" кода.
+            
+            // Возвращаем куски памяти из неуправляемой кучи в пул.
+            //ReleaseMemorySegments();
+            
+            // Сам объект в пул вернуть не можем, т.к. он уничтожается сборщиком.
+        }
+        
         public void Attach(IntPtr memSegPtr)
         {
             _memSegPtr = memSegPtr;
@@ -85,11 +103,14 @@ namespace NetCoreWs.Buffers.Experimental
                 IntPtr toRelease = next;
                 next = MemorySegment.GetNext(next);
                 
+                MemorySegment.SetPrev(toRelease, IntPtr.Zero);
+                MemorySegment.SetNext(toRelease, IntPtr.Zero);
+                
                 MemorySegment.ClearBeforeRelease(toRelease);
                 _byteBufProvider.Release(toRelease);
             }
             
-            // TODO: release self
+            _byteBufProvider.Release(this);
             _released = true;
         }
 
@@ -97,10 +118,17 @@ namespace NetCoreWs.Buffers.Experimental
         public override void ReleaseReaded()
         {
             IntPtr prev = MemorySegment.GetPrev(_memSegPtr);
+            
+            // Отвязываем от текущего.
+            MemorySegment.SetPrev(_memSegPtr, IntPtr.Zero);
+            
             while (prev != IntPtr.Zero)
             {
                 IntPtr toRelease = prev;
                 prev = MemorySegment.GetPrev(prev);
+                
+                MemorySegment.SetPrev(toRelease, IntPtr.Zero);
+                MemorySegment.SetNext(toRelease, IntPtr.Zero);
                 
                 MemorySegment.ClearBeforeRelease(toRelease);
                 _byteBufProvider.Release(toRelease);
@@ -110,18 +138,24 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadableBytes()
         {
+            ThrowIfReleased();
+            
             return _writeIndex - _readIndex + _nextWrited;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void Back(int offset)
         {
+            ThrowIfReleased();
+            
             SeekBackward(offset);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public override byte ReadByte()
         {
+            ThrowIfReleased();
+            
 			if (_readIndex < _writeIndex)
 			{
 			    _readIndex++;
@@ -136,6 +170,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override short ReadShort()
         {
+            ThrowIfReleased();
+            
             byte b1 = ReadByte();
             byte b2 = ReadByte();
 
@@ -145,6 +181,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override ushort ReadUShort()
         {
+            ThrowIfReleased();
+            
             byte b1 = ReadByte();
             byte b2 = ReadByte();
 
@@ -154,6 +192,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadInt()
         {
+            ThrowIfReleased();
+            
             byte b1 = ReadByte();
             byte b2 = ReadByte();
             byte b3 = ReadByte();
@@ -165,6 +205,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override uint ReadUInt()
         {
+            ThrowIfReleased();
+            
             byte b1 = ReadByte();
             byte b2 = ReadByte();
             byte b3 = ReadByte();
@@ -176,6 +218,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override long ReadLong()
         {
+            ThrowIfReleased();
+            
             byte b1 = ReadByte();
             byte b2 = ReadByte();
             byte b3 = ReadByte();
@@ -191,6 +235,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override ulong ReadULong()
         {
+            ThrowIfReleased();
+            
             byte b1 = ReadByte();
             byte b2 = ReadByte();
             byte b3 = ReadByte();
@@ -206,6 +252,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadToOrRollback(byte stopByte, byte[] output, int startIndex, int len)
         {
+            ThrowIfReleased();
+            
             bool stopByteMatched = false;
 
             int readed = 0;
@@ -247,6 +295,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int ReadToOrRollback(byte stopByte1, byte stopByte2, byte[] output, int startIndex, int len)
         {
+            ThrowIfReleased();
+            
             bool stopByte1Matched = false;
             bool stopBytesMatched = false;
 
@@ -299,6 +349,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int SkipTo(byte stopByte, bool include)
         {
+            ThrowIfReleased();
+            
             int skipped = 0;
 
             bool stopByteMatched = false;
@@ -334,6 +386,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int SkipTo(byte stopByte1, byte stopByte2, bool include)
         {
+            ThrowIfReleased();
+            
             int skipped = 0;
 
             bool stopByte1Matched = false;
@@ -380,6 +434,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int WritableBytes()
         {
+            ThrowIfReleased();
+            
             // TODO: Запись пока что невозможна в цепочку сегментов.
             return _memSegSize - _writeIndex - 1;
         }
@@ -387,6 +443,8 @@ namespace NetCoreWs.Buffers.Experimental
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         unsafe public override void Write(byte @byte)
         {
+            ThrowIfReleased();
+            
             // TODO: Запись пока что невозможна в цепочку сегментов.
             if (_memSegSize - 1 == _writeIndex)
             {
@@ -415,6 +473,15 @@ namespace NetCoreWs.Buffers.Experimental
 
             return encoding.GetString(bytes);
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ThrowIfReleased()
+        {
+            if (_released)
+            {
+                throw new Exception("Buffer has been released.");
+            }
+        }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SeekForward(int offset)
@@ -428,6 +495,10 @@ namespace NetCoreWs.Buffers.Experimental
             while (readIndex > writeIndex)
             {
                 memSegPtr = MemorySegment.GetNext(memSegPtr);
+                if (memSegPtr == IntPtr.Zero)
+                {
+                    throw new UnexpectedEndOfBufferException();
+                }
                 int used = MemorySegment.GetUsed(memSegPtr);
 
                 readIndex -= writeIndex + 1;
@@ -461,7 +532,10 @@ namespace NetCoreWs.Buffers.Experimental
                 nextWrited += MemorySegment.GetUsed(memSegPtr);
                 
                 memSegPtr = MemorySegment.GetPrev(memSegPtr);
-                
+                if (memSegPtr == IntPtr.Zero)
+                {
+                    throw new UnexpectedEndOfBufferException();
+                }
                 writeIndex = MemorySegment.GetUsed(memSegPtr) - 1;
                 readIndex += writeIndex;
             }
